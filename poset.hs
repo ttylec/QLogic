@@ -2,7 +2,7 @@
 module Poset where
 
 import Control.Monad
-import Control.Applicative
+import Data.List
 
 -- |Type class for finite element collection
 class Finite a where
@@ -23,7 +23,21 @@ class (Finite a, Poset a) => Logic a where
         one :: a
         zero :: a
         ortho :: a -> a
+        (\/) :: a -> a -> Maybe a
+        (/\) :: a -> a -> Maybe a
 
+        p \/ q
+            | length lub == 1 = Just $ head lub
+            | otherwise = Nothing
+            where
+                lub = lowestUpperBound p q
+
+        p /\ q
+            | length glb == 1 = Just $ head glb
+            | otherwise = Nothing
+            where
+                glb = greatestLowerBound p q
+        
 -- |Simple example of quantum logic 
 data SimpleElements = Zero | A | B | One deriving (Enum, Bounded, Show, Eq)
 simpleRelation :: SimpleElements -> SimpleElements -> Bool
@@ -50,8 +64,10 @@ instance Logic SimpleElements where
         ortho B = A
 
 -- |Quantum logic of subsets of 4 element set
-newtype Space4 = Space4 [Int] deriving (Show, Eq)
+newtype Space4 = Space4 [Int] deriving (Show)
 
+instance Eq Space4 where
+        (Space4 a) == (Space4 b) = (sort a) == (sort b)
 instance Finite Space4 where
         elements = map Space4 $ subsets [1, 2, 3, 4] 
 
@@ -61,7 +77,10 @@ instance Poset Space4 where
 instance Logic Space4 where
         one = Space4 [1, 2, 3, 4]
         zero = Space4 []
-        ortho (Space4 a) = Space4 $ [1, 2, 3, 4] `setminus` a
+        ortho (Space4 a) = Space4 $ [1, 2, 3, 4] \\ a
+        (Space4 a) /\ (Space4 b) = Just $ Space4 $ intersect a b
+        (Space4 a) \/ (Space4 b) = Just $ Space4 $ union a b
+        
 
 data Product a b = Product a b deriving (Eq, Show)
 
@@ -89,7 +108,7 @@ instance (Logic a, Logic b) => Eq (ZeroOnePasting a b) where
 
 instance (Logic a, Logic b) => Finite (ZeroOnePasting a b) where
         elements = [FirstZOP p | p <- elements] ++
-                   [SecondZOP p | p <- elements `setminus` [zero, one]]
+                   [SecondZOP p | p <- elements \\ [zero, one]]
 
 instance (Logic a, Logic b) => Poset (ZeroOnePasting a b) where
         (FirstZOP p) .<. (SecondZOP q)
@@ -122,24 +141,24 @@ lessThan :: (Logic a) => a -> [a]
 lessThan p = filter (.<. p) $ elements
 
 lowestUpperBound :: (Logic a) => a -> a -> [a]
-lowestUpperBound p q = minimal $ intersection (greaterThan p) (greaterThan q)
+lowestUpperBound p q = minimal $ intersect (greaterThan p) (greaterThan q)
 
 greatestLowerBound :: (Logic a) => a -> a -> [a]
-greatestLowerBound p q = maximal $ intersection (lessThan p) (lessThan q)
+greatestLowerBound p q = maximal $ intersect (lessThan p) (lessThan q)
 
-(\/) :: (Logic a) => a -> a -> Maybe a
-p \/ q
-    | length lub == 1 = Just $ head lub
-    | otherwise = Nothing
-    where
-        lub = lowestUpperBound p q
-
-(/\) :: (Logic a) => a -> a -> Maybe a
-p /\ q
-    | length glb == 1 = Just $ head glb
-    | otherwise = Nothing
-    where
-        glb = greatestLowerBound p q
+-- (\/) :: (Logic a) => a -> a -> Maybe a
+-- p \/ q
+--     | length lub == 1 = Just $ head lub
+--     | otherwise = Nothing
+--     where
+--         lub = lowestUpperBound p q
+-- 
+-- (/\) :: (Logic a) => a -> a -> Maybe a
+-- p /\ q
+--     | length glb == 1 = Just $ head glb
+--     | otherwise = Nothing
+--     where
+--         glb = greatestLowerBound p q
 
 hasJoin :: (Logic a) => a -> a -> Bool
 hasJoin p q = (p \/ q) /= Nothing
@@ -161,6 +180,9 @@ checkOrthomodular ps = all id [(Just b) == (rhs a b) | a <- ps, b <- ps, a .<. b
     where
         rhs a b = (b /\ ortho a) >>= (a \/) 
 
+debugOrthomodular ps = filter (\ (x, y, z) -> Just y /= z) $ [(a, b, (rhs a b)) | a <- ps, b <- ps, a .<. b]
+    where
+        rhs a b = (b /\ ortho a) >>= (a \/) 
 --
 -- Poset functions
 --
@@ -186,8 +208,8 @@ subsets :: [Int] -> [[Int]]
 subsets []  = [[]]
 subsets (x:xs) = subsets xs ++ map (x:) (subsets xs)
 
-intersection :: (Eq a) => [a] -> [a] -> [a]
-intersection ps qs = filter (`elem` qs) ps
-
-setminus :: (Eq a) => [a] -> [a] -> [a]
-a `setminus` b = filter (not . (`elem` b)) a
+-- union :: (Eq a) => [a] -> [a] -> [a]
+-- union ps qs = sort $ ps ++ (qs `setminus` ps)
+-- 
+-- setminus :: (Eq a) => [a] -> [a] -> [a]
+-- a `setminus` b = sort $ filter (not . (`elem` b)) a
