@@ -1,6 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Poset where
 
+import Control.Monad
+import Control.Applicative
+
 -- |Type class for finite element collection
 class Finite a where
         elements :: [a]
@@ -123,6 +126,40 @@ lowestUpperBound p q = minimal $ intersection (greaterThan p) (greaterThan q)
 
 greatestLowerBound :: (Logic a) => a -> a -> [a]
 greatestLowerBound p q = maximal $ intersection (lessThan p) (lessThan q)
+
+(\/) :: (Logic a) => a -> a -> Maybe a
+p \/ q
+    | length lub == 1 = Just $ head lub
+    | otherwise = Nothing
+    where
+        lub = lowestUpperBound p q
+
+(/\) :: (Logic a) => a -> a -> Maybe a
+p /\ q
+    | length glb == 1 = Just $ head glb
+    | otherwise = Nothing
+    where
+        glb = greatestLowerBound p q
+
+hasJoin :: (Logic a) => a -> a -> Bool
+hasJoin p q = (p \/ q) /= Nothing
+ 
+checkOrderReverse :: (Logic a) => [a] -> Bool
+checkOrderReverse ps = all id [(ortho q) .<. (ortho p) | 
+                              p <- ps, q <- ps, p .<. q]
+
+(-|-) :: (Logic a) => a -> a -> Bool
+p -|- q = p .<. ortho q
+
+checkSupremum :: (Logic a) => [a] -> Bool
+checkSupremum ps = all ((/= Nothing) . orthosup) ps
+    where
+        orthosup p = foldM (\/) p [q | q <- ps, p -|- q]
+
+checkOrthomodular :: (Logic a) => [a] -> Bool
+checkOrthomodular ps = all id [(Just b) == (rhs a b) | a <- ps, b <- ps, a .<. b]
+    where
+        rhs a b = (b /\ ortho a) >>= (a \/) 
 
 --
 -- Poset functions
