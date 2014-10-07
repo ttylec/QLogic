@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-module Poset where
+module QLogic where
 
 import Control.Monad
 import Data.List
