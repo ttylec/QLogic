@@ -1,4 +1,6 @@
-import Poset
+import QLogic
+import QLogic.Examples
+
 
 main :: IO ()
 main = do
