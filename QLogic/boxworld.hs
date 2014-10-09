@@ -1,4 +1,4 @@
-module QLogics.BoxWorld where
+module QLogic.BoxWorld where
 
 import QLogic
 import Data.List
@@ -52,7 +52,7 @@ instance (Show a, Show b) => Show (BoxProduct a b) where
         show (BoxPlus a p) = (show a) ++ "⊕" ++ (show p)
 
 (<>) :: (Logic a, Logic b) => a -> b -> BoxProduct a b
-(<>) = BoxProd
+(<>) = boxProd
 
 boxLess :: (Logic a, Logic b) => BoxProduct a b -> BoxProduct a b -> Bool
 boxLess (BoxProd a1 a2) (BoxProd b1 b2) = (a1 .<. b1) && (a2 .<. b2)
@@ -82,10 +82,12 @@ boxPlus a@(BoxProd a1 a2) b@(BoxProd b1 b2)
     | b `boxLess` a = a
     | a1 == b1 = if a2 `isOrthogonal` b2 then boxProd a1 (a2 \./ b2) else boxProd one one
     | a2 == b2 = if a1 `isOrthogonal` b1 then boxProd (a1 \./ b1) a2 else boxProd one one
-    | (a1 /= b1) && (a2 /= b2) = BoxPlus a b
+    | (a1 /= b1) && (a2 `isOrthogonal` b2) = BoxPlus a b
+    | (a2 /= b2) && (a1 `isOrthogonal` b1) = BoxPlus a b
     | otherwise = BoxProd one one
 boxPlus a@(BoxProd _ _) p@(BoxPlus b rest) = boxPlusReduce (boxPlus a b) rest
-boxPlus (BoxPlus a b) p = boxPlus (boxPlus a p) b
+boxPlus p@(BoxPlus _ _) a@(BoxProd _ _) = boxPlus a p
+boxPlus (BoxPlus a b) p@(BoxPlus _ _) = boxPlus (boxPlus a p) b
 
 boxPlusReduce a@(BoxProd _ _) p = boxPlus a p
 boxPlusReduce (BoxPlus a as) p = boxPlus as $ boxPlus a p
@@ -115,18 +117,33 @@ instance (Logic a, Logic b) => Eq (BoxProduct a b) where
 allBoxProducts :: (Logic a, Logic b) => [BoxProduct a b]
 allBoxProducts = nub $ [boxProd a b | a <- elements, b <- elements]
 
-allBoxSums as bs = nub $ [a `boxPlus` b | a <- as, b <- bs]
+allBoxSums :: (Logic a, Logic b) => [BoxProduct a b] -> [BoxProduct a b]
+allBoxSums [] = allBoxProducts
+allBoxSums as = nub $ [a `boxPlus` b | a <- as, b <- allBoxProducts]
 
--- instance (Logic a, Logic b) => Finite (BoxProduct a b) where
---         elements = 
+instance (Logic a, Logic b) => Finite (BoxProduct a b) where
+        elements = stable $ iterate allBoxSums allBoxProducts  
+            where
+                stable (x:ys@(y:_))
+                    | length x == length y = y
+                    | otherwise = stable ys
 
 instance (Logic a, Logic b) => Poset (BoxProduct a b) where
         (.<.) = boxLess
 
--- instance (Logic a, Logic b) => Logic (BoxProduct a b) where
---         one = BoxProd one one
---         zero = BoxProd zero zero
---         
+instance (Logic a, Logic b) => Logic (BoxProduct a b) where
+        one = BoxProd one one
+        zero = BoxProd zero zero
+        ortho q = head $ filter (\p -> (isBoxOrthogonal q p) && (p <+> q == one)) elements
+        -- ortho (BoxProd a1 a2) = (a1 <> ortho a2) <+> (ortho a1 <> a2) <+> (ortho a1 <> ortho a2)
+        -- ortho (BoxPlus a b) = (ortho a) /.\ (ortho b)
+
+isBoxOrthogonal :: (Logic a, Logic b) => BoxProduct a b -> BoxProduct a b -> Bool
+isBoxOrthogonal (BoxProd a1 a2) (BoxProd b1 b2) = (a1 `isOrthogonal` b1) || (a2 `isOrthogonal` b2)
+isBoxOrthogonal a@(BoxProd _ _) (BoxPlus c d) = (a `isBoxOrthogonal` c) && (a `isBoxOrthogonal` d)
+isBoxOrthogonal p@(BoxPlus _ _) a@(BoxProd _ _) = a `isBoxOrthogonal` p
+isBoxOrthogonal (BoxPlus a b) p@(BoxPlus _ _) = (a `isBoxOrthogonal` p) && (b `isBoxOrthogonal` p)
+
 --
 -- The following is incomplete (i.e. sth like a free product)
 --
