@@ -78,9 +78,18 @@ boxToList :: (Logic a, Logic b) => BoxProduct a b -> [FreeProduct a b]
 boxToList (BoxProduct as) = as
 
 boxFromRepr :: (AtomicLogic a, AtomicLogic b) => FreeProduct a b -> BoxProduct a b
-boxFromRepr a = head $ filter (reduced `inClass`) elements
+boxFromRepr a 
+    | reduced == Nothing = BoxProduct []
+    | otherwise = let r = fromJust reduced in 
+                      head $ filter (r `inClass`) elements
     where
         reduced = reduceAll a
+
+boxToRepr :: (AtomicLogic a, AtomicLogic b) => BoxProduct a b -> FreeProduct a b
+boxToRepr (BoxProduct as) = foldl1 (\accum a -> if len a > len accum then a else accum) as
+    where
+        len = length . freeToList
+
 
 reduce :: (Logic a, Logic b) => FreeProduct a b -> Maybe (FreeProduct a b)
 reduce a@(FreeProd _ _) = Just a
