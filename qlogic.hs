@@ -89,6 +89,8 @@ instance (Logic a, Logic b) => Logic (ZeroOnePasting a b) where
         ortho (FirstZOP p) = FirstZOP (ortho p)
         ortho (SecondZOP p) = SecondZOP (ortho p)
 
+class (Logic a) => AtomicLogic a where
+        atoms :: [a]
 --
 -- Lattice functions
 --
@@ -119,6 +121,8 @@ checkOrderReverse ps = all id [(ortho q) .<. (ortho p) |
 
 isOrthogonal :: (Logic a) => a -> a -> Bool
 isOrthogonal p q = p .<. ortho q
+(-|-) :: (Logic a) => a -> a -> Bool
+(-|-) = isOrthogonal
 
 isCompatible :: (Logic a) => a -> a -> Bool
 isCompatible a b = all (id) $ map (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]

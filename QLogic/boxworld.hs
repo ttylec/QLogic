@@ -38,7 +38,10 @@ instance Logic Lattice4 where
         ortho Y1 = Y0
         ortho Y0 = Y1
         ortho One = Zero
-        
+
+instance AtomicLogic Lattice4 where
+        atoms = [X1, X0, Y1, Y0]
+
 singleSystem = elements :: [Lattice4]
 doubleSystem = elements :: [Product Lattice4 Lattice4]
 pastedSystem = elements :: [ZeroOnePasting Lattice4 Lattice4]

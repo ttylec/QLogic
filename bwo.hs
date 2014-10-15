@@ -3,10 +3,10 @@ import QLogic.BoxWorld
 import QLogic.BoxProduct
 
 
-orthoCond :: (Logic a, Logic b) => BoxProduct a b -> BoxProduct a b -> Bool
-orthoCond a b = a /\ b == Just (zero <> zero) && a \/ b == Just (one <> one)
-
-orthoCandidates q = filter (\p -> (q <+> p) == (BoxProd one one))  $ filter (isBoxOrthogonal q) elements
+-- orthoCond :: (Logic a, Logic b) => BoxProduct a b -> BoxProduct a b -> Bool
+-- orthoCond a b = a /\ b == Just (zero <> zero) && a \/ b == Just (one <> one)
+-- 
+-- orthoCandidates q = filter (\p -> (q <+> p) == (BoxProd one one))  $ filter (isBoxOrthogonal q) elements
 
 main :: IO ()
 main = do
@@ -25,8 +25,8 @@ main = do
         putStrLn "Check order reverse"
         putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
 
-        putStrLn $ show $ filter (\ (a, b) -> not $ (ortho a) .<. (ortho b)) $
-            [(a, b) | a <- bwo_elements, b <- bwo_elements, a .>. b]
+        -- putStrLn $ show $ filter (\ (a, b) -> not $ (ortho a) .<. (ortho b)) $
+        --     [(a, b) | a <- bwo_elements, b <- bwo_elements, a .>. b]
         -- putStrLn "Orthomodularity check"
         -- putStrLn $ if checkOrthomodular bwo_elements then "Yes!" else "No..."
         -- putStrLn $ show (elements :: [BoxProduct Lattice4 Lattice4])
