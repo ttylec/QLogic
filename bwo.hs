@@ -48,18 +48,20 @@ main = do
             c = a <+> b
             bwo_elements = (elements :: [BoxProduct Lattice4 Lattice4])
 
-        putStrLn $ exportPosetStructure bwo_elements 
+        -- putStrLn $ exportPosetStructure bwo_elements 
 
         -- putStrLn $ unlines $ map (mathematicaForm' . boxToRepr) bwo_elements
-        -- putStrLn $ unlines $ map 
-        --     (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ ortho a)) --(show $ orthoCandidates a)) 
-        --     bwo_elements
+        
+        putStrLn $ show bwo_elements
+        putStrLn $ unlines $ map 
+            (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ ortho a)) --(show $ orthoCandidates a)) 
+            bwo_elements
 
-        -- putStrLn "Now let's check if our proposal of orthocompletion is idempotent"
-        -- putStrLn $ if all (\p -> (ortho . ortho $ p) == p) bwo_elements then "Yes!" else "No..."
+        putStrLn "Now let's check if our proposal of orthocompletion is idempotent"
+        putStrLn $ if all (\p -> (ortho . ortho $ p) == p) bwo_elements then "Yes!" else "No..."
 
-        -- putStrLn "Check order reverse"
-        -- putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
+        putStrLn "Check order reverse"
+        putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
 
         -- putStrLn $ show $ filter (\ (a, b) -> not $ (ortho a) .<. (ortho b)) $
         --     [(a, b) | a <- bwo_elements, b <- bwo_elements, a .>. b]

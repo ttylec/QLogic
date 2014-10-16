@@ -3,6 +3,7 @@ module QLogic.BoxProduct where
 import QLogic
 import Data.List
 import Data.Maybe
+import Data.Function
 import Control.Monad
 import QLogic.BoxWorld
 
@@ -107,25 +108,76 @@ reduce (FreePlus a@(FreeProd _ _) (FreePlus b c)) = reduce (a <+> b) >>= (`reduc
         reduce' (FreePlus a b) p = liftM (b <+>) $ reduce $ a <+> p
 
 reduceAll :: (Logic a, Logic b) => FreeProduct a b -> Maybe (FreeProduct a b)
-reduceAll a = firstCycleBy (lifted exprEq) (reduce =<<) $ Just a
+-- reduceAll a = firstCycleBy (lifted exprEq) (reduce =<<) $ Just a
+--     where
+--         lifted f (Just a) (Just b) = f a b
+--         lifted _ Nothing Nothing = True
+--         lifted _ _ _ = False
+-- 
+--         exprEq a@(FreeProd a1 a2) b@(FreeProd b1 b2) = a1 == b1 && a2 == b2
+--         exprEq (FreePlus a b) (FreePlus c d) = a == c && b == d
+--         exprEq _ _ = False
+reduceAll a 
+    | admissible alist = liftM freeFromList $ fixedPointBy (lifted eqLen) (reduceLeftRight' =<<) $ Just $ alist
+    | otherwise = Nothing
     where
+        alist = freeToList a
+        admissible (a0:[]) = True
+        admissible (a0:as) = (isJust $ sequence $ map (reduce . (a0 <+>)) as) && admissible as
+
         lifted f (Just a) (Just b) = f a b
         lifted _ Nothing Nothing = True
         lifted _ _ _ = False
 
-        exprEq a@(FreeProd a1 a2) b@(FreeProd b1 b2) = a1 == b1 && a2 == b2
-        exprEq (FreePlus a b) (FreePlus c d) = a == c && b == d
-        exprEq _ _ = False
+        eqLen a b = length a == length b
+
+reduceLeftRight' :: (Ord a, Ord b, Logic a, Logic b) => [FreeProduct a b] -> Maybe [FreeProduct a b]
+reduceLeftRight' a = (Just $ reduceSubOrdered a) >>= reduceLeft' >>= reduceRight'
+
+reduceSubOrdered :: (Logic a, Logic b) => [FreeProduct a b] -> [FreeProduct a b]
+reduceSubOrdered [] = []
+reduceSubOrdered (a0:as) 
+    | any (a0 .<. ) as = reduceSubOrdered as
+    | otherwise = a0:(reduceSubOrdered $ filter (not . (a0 .>.)) as)
+
+reduceLeft' :: (Logic a, Logic b) => [FreeProduct a b] -> Maybe [FreeProduct a b]
+reduceLeft' [] = Just []
+reduceLeft' (a0:[]) = Just [a0]
+reduceLeft' (a0@(FreeProd a0left a0right):as)
+    | (not . mutuallyOrthogonal) a0slefts = Nothing
+    | otherwise = liftM (reduced:) $ reduceLeft' rest
+    where
+        (a0s, rest) = partition ((a0right ==) . rightComponent) as
+        reduced = (foldl (\./) a0left a0slefts) <> a0right
+        a0slefts = map leftComponent a0s
+
+reduceRight' [] = Just [] 
+reduceRight' (a0:[]) = Just [a0]
+reduceRight' (a0@(FreeProd a0left a0right):as)
+    | (not . mutuallyOrthogonal) a0srights = Nothing
+    | otherwise = liftM (reduced:) $ reduceRight' rest
+    where
+        (a0s, rest) = partition ((a0left ==) . leftComponent) as
+        reduced = a0left <> (foldl (\./) a0right a0srights)
+        a0srights = map rightComponent a0s
+
+rightComponent (FreeProd a1 a2) = a2
+leftComponent (FreeProd a1 a2) = a1
 
 fromFreeProduct :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b
 fromFreeProduct = boxFromList . fromFreeProduct' 
         
 fromFreeProduct' :: (Logic a, Logic b) => FreeProduct a b -> [FreeProduct a b]
+-- fromFreeProduct' a 
+--     | any (==Nothing) reductions = []
+--     | otherwise = nub $ a:(catMaybes reductions)
+--     where
+--         reductions = map (reduceAll . freeFromList) $ permutations $ freeToList a
 fromFreeProduct' a 
-    | any (==Nothing) reductions = []
-    | otherwise = nub $ a:(catMaybes reductions)
+    | reduced == Nothing = []
+    | otherwise = [a, (fromJust reduced)]
     where
-        reductions = map (reduceAll . freeFromList) $ permutations $ freeToList a
+        reduced = reduceAll a
 
 reduceBoxProductList :: (Logic a, Logic b) => [BoxProduct a b] -> [BoxProduct a b]
 reduceBoxProductList = fixedPointBy eqLength reduce'
@@ -150,15 +202,12 @@ inClass a (BoxProduct bs) = a `elem` bs
 notInClass :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b -> Bool
 notInClass a b = not $ inClass a b
 
-
 orthoCandidates :: (AtomicLogic a, AtomicLogic b) => BoxProduct a b -> [BoxProduct a b]
 orthoCandidates a = filter (addsToOne a) $ drop 2 elements
     where
         addsToOne (BoxProduct (a:_)) (BoxProduct (b:_)) = (reduceAll $ a <+> b) == just_one
         --any (== just_one) [reduceAll $ a <+> b | a <- as, b <- bs]
         just_one = Just $ one <> one
-
-
 
 extendByList :: (Logic a, Logic b) => [FreeProduct a b] -> [BoxProduct a b] -> [BoxProduct a b]
 extendByList frees boxes = reduceBoxProductList $ concat $ map (`extend` boxes) frees
