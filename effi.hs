@@ -1,8 +1,12 @@
 import QLogic
-import QLogic.Examples
+-- import QLogic.Examples
+import QLogic.BoxProduct
+import QLogic.BoxWorld
 
 
 main :: IO ()
 main = do
-        let r = checkOrthomodular $ (elements :: [Product Space4 Space4])
-        putStrLn $ if r then "Yes!\n" else "No!\n"
+        let bwo_elements = (elements :: [BoxProduct TwoTwoBoxWorld Lattice4])
+        -- let bwo_elements = (elements :: [TwoTwoBoxWorld])
+
+        putStrLn $ show $ length bwo_elements

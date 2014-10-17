@@ -44,7 +44,9 @@ main :: IO ()
 main = do
         let bwo_elements = (elements :: [TwoTwoBoxWorld])
 
-        putStrLn $ createStaticBoxProduct "TwoTwoBoxWorld" (elements :: [BoxProduct Lattice4 Lattice4])
+        putStrLn $ createStaticBoxProduct "TwoTwoBoxWorld" 
+            (atoms :: [BoxProduct Lattice4 Lattice4]) 
+            (elements :: [BoxProduct Lattice4 Lattice4])
 
         -- putStrLn $ exportPosetStructure bwo_elements 
 
