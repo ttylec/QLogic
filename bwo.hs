@@ -42,15 +42,15 @@ exportPosetStructure a = "{" ++
 
 main :: IO ()
 main = do
-        let bwo_elements = (elements :: [TwoTwoBoxWorld])
+        let bwo_elements = (elements :: [BoxProduct Lattice4 Lattice4])
 
-        putStrLn $ createStaticBoxProduct "TwoTwoBoxWorld" (elements :: [BoxProduct Lattice4 Lattice4])
+        --putStrLn $ createStaticBoxProduct "TwoTwoBoxWorld" (elements :: [BoxProduct Lattice4 Lattice4])
 
         -- putStrLn $ exportPosetStructure bwo_elements 
 
         -- putStrLn $ unlines $ map (mathematicaForm' . boxToRepr) bwo_elements
         
-        -- putStrLn $ show bwo_elements
+        putStrLn $ show bwo_elements
         -- putStrLn $ unlines $ map 
         --     (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ ortho a)) --(show $ orthoCandidates a)) 
         --     bwo_elements

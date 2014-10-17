@@ -2,6 +2,7 @@ import QLogic
 -- import QLogic.Examples
 import QLogic.BoxProduct
 import QLogic.BoxWorld
+import QLogic.TwoTwoBoxWorld
 
 
 main :: IO ()
