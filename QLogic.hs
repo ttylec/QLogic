@@ -5,6 +5,9 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 
+class Repr a where
+        repr :: a -> String
+
 -- |Type class for finite element collection
 class Finite a where
         elements :: [a]

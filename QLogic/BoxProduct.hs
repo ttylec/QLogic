@@ -7,9 +7,6 @@ import Data.Function
 import Control.Monad
 import Data.Typeable
 
-class Repr a where
-        repr :: a -> String
-
 data FreeProduct a b = FreeProd a b | FreePlus (FreeProduct a b) (FreeProduct a b)
 
 instance (Show a, Show b) => Show (FreeProduct a b) where
