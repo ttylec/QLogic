@@ -18,16 +18,13 @@ instance (Repr a, Repr b) => Repr (FreeProduct a b) where
         repr (FreeProd a b) = (repr a) ++ (repr b)
         repr (FreePlus a p) = (repr a) ++ "plus" ++ (repr p)
 
-
 instance (Poset a, Poset b) => Eq (FreeProduct a b) where
         a == b = a .<. b && b .<. a
 
 instance (Poset a, Poset b) => Poset (FreeProduct a b) where
         (FreeProd a1 a2) .<. (FreeProd b1 b2) = a1 .<. b1 && a2 .<. b2
-        a .<. b = all (\x -> any (x .<.) blist) alist
-            where
-                alist = freeToList a
-                blist = freeToList b
+        a@(FreeProd _ _) .<. (FreePlus b bs) = a .<. b || a .<. bs
+        (FreePlus a as) .<. b = a .<. b && as .<. b
 
 (<>) :: (Logic a, Logic b) => a -> b -> FreeProduct a b
 (<>) a b
@@ -58,7 +55,7 @@ instance (Repr a, Repr b) => Repr (BoxProduct a b) where
 
 instance (Logic a, Logic b) => Eq (BoxProduct a b) where
         (BoxProduct []) == (BoxProduct []) = True
-        (BoxProduct as) == (BoxProduct bs) = any (`elem` bs) as
+        (BoxProduct as) == (BoxProduct bs) = {-# SCC bpeq #-} any (`elem` bs) as
 
 instance (Logic a, Logic b) => Poset (BoxProduct a b) where
         (BoxProduct as) .<. (BoxProduct bs) = any id [a .<. b | a <- as, b <- bs]
@@ -68,9 +65,6 @@ instance (AtomicLogic a, AtomicLogic b) => Finite (BoxProduct a b) where
             where
                 zerozero = fromFreeProduct $ zero <> zero
                 oneone = fromFreeProduct $ one <> one
-                -- others = fixedPointBy (eqLen) (accumulateAndExtend) bppairs 
-                -- accumulateAndExtend a = reduceBoxProductList $ a ++ (extendByList pairs a)
-                -- eqLen a b = length a == length b
                 others = concat $ takeWhile ((> 1) . length) $ iterate (extendByList pairs) atoms 
                 pairs = [a <> b | a <- atoms, b <- atoms]
                 bppairs = map fromFreeProduct pairs
@@ -194,15 +188,26 @@ fromFreeProduct' a
         reduced = reduceAll a
 
 reduceBoxProductList :: (Logic a, Logic b) => [BoxProduct a b] -> [BoxProduct a b]
-reduceBoxProductList as = fixedPointBy eqLength reduce' $ filter (/= BoxProduct []) as
+reduceBoxProductList as = fixedPointBy eqLength (reduceByHead) $ filter (/= BoxProduct []) as
     where
         eqLength a b = length a == length b
-        reduce' [] = []
-        reduce' (a:as) = merged_a:(reduce' rest)
+        reduce' accum [] = accum
+        reduce' accum (a:as) = reduce' (merged_a:accum) rest
             where
-                merged_a = foldl merge a $ filter (== a) as
+                merged_a = foldl' merge a $ filter (== a) as
                 rest = filter (/= a) as
                 merge (BoxProduct a) (BoxProduct b) = boxFromList $ a ++ b
+
+reduceByHead :: (Logic a, Logic b) => [BoxProduct a b] -> [BoxProduct a b]
+reduceByHead [] = []
+reduceByHead (a:[]) = [a]
+reduceByHead (a:as) = b0:(reduceByHead bs)
+    where
+        (b0:bs) = foldl' mergeOnHead [a] as
+        mergeOnHead (h:rest) b
+            | h == b = (merge h b):rest
+            | otherwise = h:b:rest
+        merge (BoxProduct a) (BoxProduct b) = boxFromList $ a ++ b
 
 extendBoxProduct :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b -> BoxProduct a b
 extendBoxProduct a@(FreeProd _ _) (BoxProduct bs) = boxFromList $ nub $ concat $ map (fromFreeProduct' . (a <+>)) bs

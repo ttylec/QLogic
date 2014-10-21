@@ -1,3 +1,4 @@
+import Control.DeepSeq
 import QLogic
 -- import QLogic.Examples
 import QLogic.BoxProduct
@@ -12,5 +13,9 @@ main = do
         let pairs = [a <> b | a <- (atoms :: [TwoTwoBoxWorld]), b <- (atoms :: [Lattice4])]
             ats = atoms :: [BoxProduct TwoTwoBoxWorld Lattice4]
             step1 = extendByList pairs ats
+            step2 = extendByList pairs step1
+            nstep1 = testElements' pairs atoms
+            nstep2 = testElements' pairs nstep1
 
-        putStrLn $ show $ length step1
+        putStrLn $ show $ length (nstep1)
+        putStrLn $ show $ length (nstep2)
