@@ -194,7 +194,7 @@ fromFreeProduct' a
         reduced = reduceAll a
 
 reduceBoxProductList :: (Logic a, Logic b) => [BoxProduct a b] -> [BoxProduct a b]
-reduceBoxProductList = fixedPointBy eqLength reduce'
+reduceBoxProductList as = fixedPointBy eqLength reduce' $ filter (/= BoxProduct []) as
     where
         eqLength a b = length a == length b
         reduce' [] = []
@@ -231,6 +231,38 @@ extend a@(FreeProd _ _) boxes =
         notLessThan a c = not $ lessThan a c
         lessThan a (BoxProduct c) = any (a .<.) c
 
+boxFromFree :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b
+boxFromFree a
+    | reduceList == [] = BoxProduct []
+    | otherwise = boxFromList $ a:reduceList
+    where
+        reduceList = catMaybes $ map (reduceAll' . freeFromList) $ permutations $ freeToList a
+
+reduceAll' :: (Logic a, Logic b) => FreeProduct a b -> Maybe (FreeProduct a b)
+reduceAll' a = firstCycleBy (lifted exprEq) (reduce =<<) $ Just a
+    where
+        lifted f (Just a) (Just b) = f a b
+        lifted _ Nothing Nothing = True
+        lifted _ _ _ = False
+
+        exprEq a@(FreeProd a1 a2) b@(FreeProd b1 b2) = a1 == b1 && a2 == b2
+        exprEq (FreePlus a b) (FreePlus c d) = a == c && b == d
+        exprEq _ _ = False
+
+boxRepr :: (Logic a, Logic b) => BoxProduct a b -> FreeProduct a b
+boxRepr (BoxProduct (a:_)) = a
+
+testElements' :: (AtomicLogic a, AtomicLogic b) => [FreeProduct a b] -> [BoxProduct a b] -> [BoxProduct a b]
+testElements' atoms els = reduceBoxProductList [boxFromFree $ a <+> b | a <- atoms, b <- reps, (not $ a .<. b)]
+    where
+        reps = map boxRepr els
+            
+testElements :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b]
+testElements = reduceBoxProductList combinations
+        where
+            combinations = concat $ (take 3 $ iterate (testElements' freeAtoms) boxAtoms)
+            freeAtoms = [a <> b | a <- atoms, b <- atoms]
+            boxAtoms = map (boxFromFree) freeAtoms
 
 (<->) :: (Logic a) => a -> a -> a
 b <-> a = fromJust $ b /\ ortho a

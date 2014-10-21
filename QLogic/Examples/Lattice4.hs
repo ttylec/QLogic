@@ -1,9 +1,6 @@
-module QLogic.BoxWorld where
+module QLogic.Examples.Lattice4 where
 
 import QLogic
-
--- |New naming convention
-type Lattice22 = Lattice4
 
 -- |Simple four-atom lattice
 data Lattice4 = Zero | X1 | X0 | Y1 | Y0 | One deriving (Bounded, Enum, Eq, Ord, Show)

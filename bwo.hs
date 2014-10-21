@@ -1,5 +1,5 @@
 import QLogic
-import QLogic.BoxWorld
+import QLogic.Examples.Lattice4
 import QLogic.BoxProduct
 
 import Data.List

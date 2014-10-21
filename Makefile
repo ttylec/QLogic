@@ -1,7 +1,7 @@
 GHCOPTS=-O3 -threaded -rtsopts -XBangPatterns -fforce-recomp
 GHCDEBUG= -auto-all -caf-all -prof
 
-LIBDEPS=QLogic.hs QLogic/BoxProduct.hs QLogic/BoxWorld.hs
+LIBDEPS=QLogic.hs
 
 all: effi bwo
 
