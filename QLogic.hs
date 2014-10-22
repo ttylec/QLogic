@@ -8,8 +8,9 @@ import Data.Maybe
 import Data.Typeable
 import qualified Data.Map.Lazy as Map
 
-class Repr a where
+class (Show a) => Repr a where
         repr :: a -> String
+        repr = show
 
 -- |Type class for finite element collection
 class Finite a where

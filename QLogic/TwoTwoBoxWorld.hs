@@ -2,6 +2,9 @@ module QLogic.TwoTwoBoxWorld where
 
 import QLogic
 data TwoTwoBoxWorld = ZeroZero | OneOne | X1X1 | X1X0 | X1Y1 | X1Y0 | X0X1 | X0X0 | X0Y1 | X0Y0 | Y1X1 | Y1X0 | Y1Y1 | Y1Y0 | Y0X1 | Y0X0 | Y0Y1 | Y0Y0 | X1X1plusX1X0 | X1X1plusX0X1 | X1X1plusX0X0 | X1X1plusX0Y1 | X1X1plusX0Y0 | X1X1plusY1X0 | X1X1plusY0X0 | X1X0plusX0X1 | X1X0plusX0X0 | X1X0plusX0Y1 | X1X0plusX0Y0 | X1X0plusY1X1 | X1X0plusY0X1 | X1Y1plusX0X1 | X1Y1plusX0X0 | X1Y1plusX0Y1 | X1Y1plusX0Y0 | X1Y1plusY1Y0 | X1Y1plusY0Y0 | X1Y0plusX0X1 | X1Y0plusX0X0 | X1Y0plusX0Y1 | X1Y0plusX0Y0 | X1Y0plusY1Y1 | X1Y0plusY0Y1 | X0X1plusX0X0 | X0X1plusY1X0 | X0X1plusY0X0 | X0X0plusY1X1 | X0X0plusY0X1 | X0Y1plusY1Y0 | X0Y1plusY0Y0 | X0Y0plusY1Y1 | X0Y0plusY0Y1 | Y1X1plusY1X0 | Y1X1plusY0X0 | Y1X1plusY0Y1 | Y1X1plusY0Y0 | Y1X0plusY0X1 | Y1X0plusY0Y1 | Y1X0plusY0Y0 | Y1Y1plusY0X1 | Y1Y1plusY0X0 | Y1Y1plusY0Y0 | Y1Y0plusY0X1 | Y1Y0plusY0X0 | Y1Y0plusY0Y1 | Y0X1plusY0X0 | X1X1plusX1X0plusX0X1 | X1X1plusX1X0plusX0X0 | X1X1plusX1X0plusX0Y1 | X1X1plusX1X0plusX0Y0 | X1X1plusX0X1plusX0X0 | X1X1plusX0X1plusY1X0 | X1X1plusX0X1plusY0X0 | X1X0plusX0X1plusX0X0 | X1X0plusX0X0plusY1X1 | X1X0plusX0X0plusY0X1 | X1Y1plusX0X1plusX0X0 | X1Y1plusX0Y1plusY1Y0 | X1Y1plusX0Y1plusY0Y0 | X1Y0plusX0X1plusX0X0 | X1Y0plusX0Y0plusY1Y1 | X1Y0plusX0Y0plusY0Y1 deriving (Enum, Bounded, Eq, Show)
+
+instance Repr TwoTwoBoxWorld where
+
 instance Finite TwoTwoBoxWorld where
     elements = [minBound..]
 
