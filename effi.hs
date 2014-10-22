@@ -17,5 +17,5 @@ main = do
             nstep1 = testElements' pairs atoms
             nstep2 = testElements' pairs nstep1
 
-        putStrLn $ show $ length (nstep1)
-        putStrLn $ show $ length (nstep2)
+        putStrLn $ show $ length (step1)
+        putStrLn $ show $ length (step2)

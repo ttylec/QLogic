@@ -1,13 +1,9 @@
 import QLogic
 import QLogic.Examples.Lattice4
+import QLogic.TwoTwoBoxWorld
 import QLogic.BoxProduct
 
 import Data.List
-
--- orthoCond :: (Logic a, Logic b) => BoxProduct a b -> BoxProduct a b -> Bool
--- orthoCond a b = a /\ b == Just (zero <> zero) && a \/ b == Just (one <> one)
--- 
--- orthoCandidates q = filter (\p -> (q <+> p) == (BoxProd one one))  $ filter (isBoxOrthogonal q) elements
 
 mathematicaForm' :: FreeProduct Lattice4 Lattice4 -> String
 mathematicaForm' (FreeProd x y)  
@@ -42,27 +38,28 @@ exportPosetStructure a = "{" ++
 
 main :: IO ()
 main = do
-        let bwo_elements = (elements :: [BoxProduct Lattice4 Lattice4])
+        let bwo = (elements :: [BoxProduct Lattice4 Lattice4])
+            ats = (atoms :: [BoxProduct Lattice4 Lattice4])
+            test_elements = (testElements :: [BoxProduct Lattice4 Lattice4])
 
-        --putStrLn $ createStaticBoxProduct "TwoTwoBoxWorld" (elements :: [BoxProduct Lattice4 Lattice4])
-
-        -- putStrLn $ exportPosetStructure bwo_elements 
+        putStrLn $ createStaticBoxProduct "TestTwoTwoBoxWorld" ats bwo
 
         -- putStrLn $ unlines $ map (mathematicaForm' . boxToRepr) bwo_elements
         
-        putStrLn $ show bwo_elements
+        -- putStrLn $ show (elements :: [BoxProduct Lattice4 Lattice4])
         -- putStrLn $ unlines $ map 
-        --     (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ ortho a)) --(show $ orthoCandidates a)) 
-        --     bwo_elements
-
-        -- putStrLn "Now let's check if our proposal of orthocompletion is idempotent"
-        -- putStrLn $ if all (\p -> (ortho . ortho $ p) == p) bwo_elements then "Yes!" else "No..."
-
-        -- putStrLn "Check order reverse"
-        -- putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
-
-        -- putStrLn "Check supremums"
-        -- putStrLn $ if checkSupremum bwo_elements then "Yes!" else "No..."
-
-        -- putStrLn "Orthomodularity check"
-        -- putStrLn $ if checkOrthomodular bwo_elements then "Yes!" else "No..."
+        --     (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ orthoIn bwo a)) --(show $ orthoCandidates a)) 
+        --     bwo
+            -- (elements :: [TwoTwoBoxWorld])
+-- 
+--         putStrLn "Now let's check if our proposal of orthocompletion is idempotent"
+--         putStrLn $ if all (\p -> (ortho . ortho $ p) == p) bwo_elements then "Yes!" else "No..."
+-- 
+--         putStrLn "Check order reverse"
+--         putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
+-- 
+--         putStrLn "Check supremums"
+--         putStrLn $ if checkSupremum bwo_elements then "Yes!" else "No..."
+-- 
+--         putStrLn "Orthomodularity check"
+--         putStrLn $ if checkOrthomodular bwo_elements then "Yes!" else "No..."
