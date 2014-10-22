@@ -41,4 +41,3 @@ instance Logic Lattice4 where
 
 instance AtomicLogic Lattice4 where
         atoms = [X1, X0, Y1, Y0]
-

@@ -1,9 +1,12 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, DeriveDataTypeable #-}
 module QLogic where
 
 import Control.Monad
 import Data.List
 import Data.Maybe
+
+import Data.Typeable
+import qualified Data.Map.Lazy as Map
 
 class Repr a where
         repr :: a -> String
@@ -25,20 +28,24 @@ class (Finite a, Poset a) => Logic a where
         one :: a
         zero :: a
         ortho :: a -> a
-        (\/) :: a -> a -> Maybe a
-        (/\) :: a -> a -> Maybe a
+        orthoIn :: [a] -> a -> a
+        
+        ortho = orthoIn elements
+        orthoIn _ = ortho
+        -- (\/) :: a -> a -> Maybe a
+        -- (/\) :: a -> a -> Maybe a
 
-        p \/ q
-            | length lub == 1 = Just $ head lub
-            | otherwise = Nothing
-            where
-                lub = lowestUpperBound p q
+        -- p \/ q
+        --     | length lub == 1 = Just $ head lub
+        --     | otherwise = Nothing
+        --     where
+        --         lub = lowestUpperBound p q
 
-        p /\ q
-            | length glb == 1 = Just $ head glb
-            | otherwise = Nothing
-            where
-                glb = greatestLowerBound p q
+        -- p /\ q
+        --     | length glb == 1 = Just $ head glb
+        --     | otherwise = Nothing
+        --     where
+        --         glb = greatestLowerBound p q
         
 --
 -- Creating new 
@@ -98,52 +105,100 @@ class (Logic a) => AtomicLogic a where
 -- Lattice functions
 --
 
--- |Return list of elements in Logic a that are greater than given element
-greaterThan :: (Logic a) => a -> [a] 
-greaterThan p = filter (p .<. ) $ elements
+joinIn :: (Logic a) => [a] -> a -> a -> Maybe a
+joinIn set p q
+    | length lub == 1 = Just $ head lub
+    | otherwise = Nothing
+    where
+        lub = lowestUpperBoundIn set p q
 
--- |Return list of elements in Logic a that are less than given element
-lessThan :: (Logic a) => a -> [a] 
-lessThan p = filter (.<. p) $ elements
+meetIn :: (Logic a) => [a] -> a -> a -> Maybe a
+meetIn set p q 
+    | length glb == 1 = Just $ head glb
+    | otherwise = Nothing
+    where
+        glb = greatestLowerBoundIn set p q
+        
+(\/) :: (Logic a) => a -> a -> Maybe a
+(\/) = joinIn elements
+
+(/\) :: (Logic a) => a -> a -> Maybe a
+(/\) = meetIn elements
+
+lowestUpperBoundIn :: (Logic a) => [a] -> a -> a -> [a]
+lowestUpperBoundIn set p q = minimal $ filter (\r -> (p .<. r) && (q .<. r)) $ set 
 
 lowestUpperBound :: (Logic a) => a -> a -> [a]
-lowestUpperBound p q = minimal $ filter (\r -> (p .<. r) && (q .<. r)) $ elements
+lowestUpperBound = lowestUpperBoundIn elements
+
+greatestLowerBoundIn :: (Logic a) => [a] -> a -> a -> [a]
+greatestLowerBoundIn set p q = maximal $ filter (\r -> (r .<. p) && (r .<. q)) $ set
 
 greatestLowerBound :: (Logic a) => a -> a -> [a]
-greatestLowerBound p q = maximal $ filter (\r -> (r .<. p) && (r .<. q)) $ elements
+greatestLowerBound = greatestLowerBoundIn elements
+
+-- |Return list of elements in Logic a that are greater than given element
+greaterThanIn :: (Logic a) => [a] -> a -> [a] 
+greaterThanIn set p = filter (p .<. ) $ set
+
+greaterThan :: (Logic a) => a -> [a] 
+greaterThan = greaterThanIn elements
+
+-- |Return list of elements in Logic a that are less than given element
+lessThanIn :: (Logic a) => [a] -> a -> [a] 
+lessThanIn set p = filter (.<. p) $ set
+
+lessThan :: (Logic a) => a -> [a] 
+lessThan = lessThanIn elements
+
+-- |Returns list of elements covering given one
+coversOfIn :: (Logic a) => [a] -> a -> [a]
+coversOfIn set a = minimal $ filter (not . (a ==)) $ greaterThanIn set a
 
 coversOf :: (Logic a) => a -> [a]
-coversOf a = minimal $filter (not . (a ==)) $ greaterThan a
+coversOf = coversOfIn elements
+
+-- |Returns True if two elements have join
+hasJoinIn :: (Logic a) => [a] -> a -> a -> Bool
+hasJoinIn set p q = isJust $ joinIn set p q
 
 hasJoin :: (Logic a) => a -> a -> Bool
-hasJoin p q = isJust $ p \/ q
+hasJoin = hasJoinIn elements
  
 checkOrderReverse :: (Logic a) => [a] -> Bool
-checkOrderReverse ps = all id [(ortho q) .<. (ortho p) | 
+checkOrderReverse ps = all id [(orthoIn ps q) .<. (orthoIn ps p) | 
                               p <- ps, q <- ps, p .<. q]
 
-isOrthogonal :: (Logic a) => a -> a -> Bool
-isOrthogonal p q = p .<. ortho q
-(-|-) :: (Logic a) => a -> a -> Bool
-(-|-) = isOrthogonal
+isOrthoIn :: (Logic a) => [a] -> a -> a -> Bool
+isOrthoIn set p q = p .<. (orthoIn set q)
 
-isCompatible :: (Logic a) => a -> a -> Bool
-isCompatible a b = all (id) $ map (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
+(-|-) :: (Logic a) => a -> a -> Bool
+(-|-) = isOrthoIn elements
+
+isCompatibleIn :: (Logic a) => [a] -> a -> a -> Bool
+isCompatibleIn set a b = all (id) $ map (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
     where 
           are_equal_a = liftM2 (==) aa $ Just a
           are_equal_b = liftM2 (==) bb $ Just b
-          are_ortho = liftM mutuallyOrthogonal $ sequence [a1, b1, c] 
+          are_ortho = liftM (mutuallyOrthogonalIn set) $ sequence [a1, b1, c] 
           c = a /\ b
-          a1 = a /\ ortho b
-          b1 = b /\ ortho a
+          a1 = a /\ orth b
+          b1 = b /\ orth a
           aa = join $ liftM2 (\/) a1 c
           bb = join $ liftM2 (\/) b1 c
 
-mutuallyOrthogonal :: (Logic a) => [a] -> Bool
-mutuallyOrthogonal = mutuallyBy isOrthogonal
+          (/\) = meetIn set
+          (\/) = joinIn set
+          orth = orthoIn set 
 
-mutuallyCompatible :: (Logic a) => [a] -> Bool
-mutuallyCompatible = mutuallyBy isCompatible
+mutuallyOrthogonalIn :: (Logic a) => [a] -> [a] -> Bool
+mutuallyOrthogonalIn set = mutuallyBy (isOrthoIn set)
+
+mutuallyOrthogonal :: (Logic a) => [a] -> Bool
+mutuallyOrthogonal = mutuallyOrthogonalIn elements
+
+mutuallyCompatibleIn :: (Logic a) => [a] -> [a] -> Bool
+mutuallyCompatibleIn set = mutuallyBy (isCompatibleIn set)
 
 mutuallyBy :: (a -> a -> Bool) -> [a] -> Bool
 mutuallyBy _ [] = True
@@ -156,7 +211,7 @@ mutuallyBy f (a:as) = (all (f a) as) && mutuallyBy f as
 checkSupremum :: (Logic a) => [a] -> Bool
 checkSupremum ps = all ((/= Nothing) . orthosup) ps
     where
-        orthosup p = foldM (\/) p [q | q <- ps, p `isOrthogonal` q]
+        orthosup p = foldM (\/) p [q | q <- ps, p -|- q]
 
 checkOrthomodular :: (Logic a) => [a] -> Bool
 checkOrthomodular ps = all id [(Just b) == (rhs a b) | a <- ps, b <- ps, a .<. b]
@@ -168,9 +223,14 @@ debugOrthomodular ps = filter (\ (x, y, z) -> Just y /= z) $ [(a, b, (rhs a b)) 
         rhs a b = (b /\ ortho a) >>= (a \/) 
 
 -- |Unsafe join, use only when sure that join exists
+unsafeJoinIn :: (Logic a) => [a] -> a -> a -> a
+unsafeJoinIn el a b = fromJust $ joinIn el a b
+
 a \./ b = fromJust $ a \/ b
 
 -- |Unsafe meet, use only when sure that meet exists
+unsafeMeetIn :: (Logic a) => [a] -> a -> a -> a
+unsafeMeetIn el a b = fromJust $ meetIn el a b
 a /.\ b = fromJust $ a /\ b
 
 --

@@ -8,6 +8,16 @@ import Data.Function
 import Control.Monad
 import Data.Typeable
 
+import Control.Parallel
+import Control.Parallel.Strategies
+
+import Control.DeepSeq
+
+instance NFData (BoxProduct a b) where
+        rnf (BoxProduct a) = rnf a `seq` ()
+
+instance NFData (FreeProduct a b) where
+
 data FreeProduct a b = FreeProd a b | FreePlus (FreeProduct a b) (FreeProduct a b)
 
 instance (Show a, Show b) => Show (FreeProduct a b) where
@@ -75,7 +85,11 @@ instance (AtomicLogic a, AtomicLogic b) => Logic (BoxProduct a b) where
         ortho a
             | a == zero = one
             | a == one = zero 
-            | otherwise = (head . minimal . orthoCandidates) a
+            | otherwise = boxOrtho a
+        orthoIn el a
+            | a == zero = one
+            | a == one = zero
+            | otherwise = boxOrthoIn el a
 
 instance (AtomicLogic a, AtomicLogic b) => AtomicLogic (BoxProduct a b) where
         atoms = [fromFreeProduct $ a <> b | a <- atoms, b <- atoms]
@@ -86,8 +100,16 @@ boxFromList = BoxProduct . nub
 boxToList :: (Logic a, Logic b) => BoxProduct a b -> [FreeProduct a b]
 boxToList (BoxProduct as) = as
 
+boxFromReprIn :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b] -> FreeProduct a b -> BoxProduct a b
+boxFromReprIn el a 
+    | reduced == Nothing = BoxProduct []
+    | otherwise = let r = fromJust reduced in 
+                      head $ filter (r `inClass`) el
+    where
+        reduced = reduceAll a
+
 boxFromRepr :: (AtomicLogic a, AtomicLogic b) => FreeProduct a b -> BoxProduct a b
-boxFromRepr a 
+boxFromRepr a
     | reduced == Nothing = BoxProduct []
     | otherwise = let r = fromJust reduced in 
                       head $ filter (r `inClass`) elements
@@ -99,7 +121,6 @@ boxToRepr (BoxProduct as) = foldl1 (\accum a -> if len a > len accum then a else
     where
         len = length . freeToList
 
-
 reduce :: (Logic a, Logic b) => FreeProduct a b -> Maybe (FreeProduct a b)
 reduce a@(FreeProd _ _) = Just a
 reduce (FreePlus a@(FreeProd a1 a2) b@(FreeProd b1 b2))
@@ -107,8 +128,8 @@ reduce (FreePlus a@(FreeProd a1 a2) b@(FreeProd b1 b2))
     | b .<. a = Just a
     | a1 == b1 = if a2 -|- b2 then (Just $ a1 <> (a2 \./ b2)) else Nothing
     | a2 == b2 = if a1 -|- b1 then (Just $ (a1 \./ b1) <> a2) else Nothing
-    | (a1 /= b1) && (a2 `isOrthogonal` b2) = Just $ a <+> b
-    | (a2 /= b2) && (a1 `isOrthogonal` b1) = Just $ a <+> b
+    | (a1 /= b1) && (a2 -|- b2) = Just $ a <+> b
+    | (a2 /= b2) && (a1 -|- b1) = Just $ a <+> b
     | otherwise = Nothing
 reduce (FreePlus a@(FreeProd _ _) (FreePlus b c)) = reduce (a <+> b) >>= (`reduce'` c)
     where
@@ -116,15 +137,6 @@ reduce (FreePlus a@(FreeProd _ _) (FreePlus b c)) = reduce (a <+> b) >>= (`reduc
         reduce' (FreePlus a b) p = liftM (b <+>) $ reduce $ a <+> p
 
 reduceAll :: (Logic a, Logic b) => FreeProduct a b -> Maybe (FreeProduct a b)
--- reduceAll a = firstCycleBy (lifted exprEq) (reduce =<<) $ Just a
---     where
---         lifted f (Just a) (Just b) = f a b
---         lifted _ Nothing Nothing = True
---         lifted _ _ _ = False
--- 
---         exprEq a@(FreeProd a1 a2) b@(FreeProd b1 b2) = a1 == b1 && a2 == b2
---         exprEq (FreePlus a b) (FreePlus c d) = a == c && b == d
---         exprEq _ _ = False
 reduceAll a 
     | admissible alist = liftM freeFromList $ fixedPointBy (lifted eqLen) (reduceLeftRight' =<<) $ Just $ alist
     | otherwise = Nothing
@@ -176,11 +188,6 @@ fromFreeProduct :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b
 fromFreeProduct = boxFromList . fromFreeProduct' 
         
 fromFreeProduct' :: (Logic a, Logic b) => FreeProduct a b -> [FreeProduct a b]
--- fromFreeProduct' a 
---     | any (==Nothing) reductions = []
---     | otherwise = nub $ a:(catMaybes reductions)
---     where
---         reductions = map (reduceAll . freeFromList) $ permutations $ freeToList a
 fromFreeProduct' a 
     | reduced == Nothing = []
     | otherwise = [a, (fromJust reduced)]
@@ -222,19 +229,35 @@ notInClass :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b -> Bool
 notInClass a b = not $ inClass a b
 
 orthoCandidates :: (AtomicLogic a, AtomicLogic b) => BoxProduct a b -> [BoxProduct a b]
-orthoCandidates a = filter (addsToOne a) $ drop 2 elements
+orthoCandidates a = filter (addsToOne a) $ elements
     where
         addsToOne (BoxProduct (a:_)) (BoxProduct (b:_)) = (reduceAll $ a <+> b) == just_one
         --any (== just_one) [reduceAll $ a <+> b | a <- as, b <- bs]
         just_one = Just $ one <> one
 
 extendByList :: (Logic a, Logic b) => [FreeProduct a b] -> [BoxProduct a b] -> [BoxProduct a b]
-extendByList frees boxes = reduceBoxProductList $ concat $ map (`extend` boxes) frees
+extendByList frees boxes = reduceBoxProductList $ concat $ (map (`extend` boxes) frees `using` parList rdeepseq)
 extend a@(FreeProd _ _) boxes = 
     reduceBoxProductList $ filter (/= BoxProduct []) $ map (extendBoxProduct a) $ filter (a `notLessThan`) boxes
     where
         notLessThan a c = not $ lessThan a c
         lessThan a (BoxProduct c) = any (a .<.) c
+
+--
+-- Alternate construction of BoxProduct elements
+--
+
+testElements' :: (AtomicLogic a, AtomicLogic b) => [FreeProduct a b] -> [BoxProduct a b] -> [BoxProduct a b]
+testElements' atoms els = reduceBoxProductList [boxFromFree $ a <+> b | a <- atoms, b <- reps, (not $ a .<. b)]
+    where
+        reps = map boxRepr els
+            
+testElements :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b]
+testElements = reduceBoxProductList combinations
+        where
+            combinations = concat $ (take 3 $ iterate (testElements' freeAtoms) boxAtoms)
+            freeAtoms = [a <> b | a <- atoms, b <- atoms]
+            boxAtoms = map (boxFromFree) freeAtoms
 
 boxFromFree :: (Logic a, Logic b) => FreeProduct a b -> BoxProduct a b
 boxFromFree a
@@ -257,17 +280,26 @@ reduceAll' a = firstCycleBy (lifted exprEq) (reduce =<<) $ Just a
 boxRepr :: (Logic a, Logic b) => BoxProduct a b -> FreeProduct a b
 boxRepr (BoxProduct (a:_)) = a
 
-testElements' :: (AtomicLogic a, AtomicLogic b) => [FreeProduct a b] -> [BoxProduct a b] -> [BoxProduct a b]
-testElements' atoms els = reduceBoxProductList [boxFromFree $ a <+> b | a <- atoms, b <- reps, (not $ a .<. b)]
-    where
-        reps = map boxRepr els
-            
-testElements :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b]
-testElements = reduceBoxProductList combinations
-        where
-            combinations = concat $ (take 3 $ iterate (testElements' freeAtoms) boxAtoms)
-            freeAtoms = [a <> b | a <- atoms, b <- atoms]
-            boxAtoms = map (boxFromFree) freeAtoms
+--
+-- Alternative orthocompletion
+--
+boxOrtho :: (AtomicLogic a, AtomicLogic b) => BoxProduct a b -> BoxProduct a b
+boxOrtho = (foldl1 (/.\)) . boxOrtho' . boxRepr
+
+boxOrtho' :: (AtomicLogic a, AtomicLogic b) => FreeProduct a b -> [BoxProduct a b]
+boxOrtho' (FreeProd a b) = [boxFromRepr $ (a <> ortho b) <+> (ortho a <> b) <+> (ortho a <> ortho b)]
+boxOrtho' (FreePlus a b) = concat [boxOrtho' a, boxOrtho' b]
+
+boxOrthoIn :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b] -> BoxProduct a b -> BoxProduct a b
+boxOrthoIn el a = (foldl1 (unsafeMeetIn el)) $ boxOrthoIn' el $ boxRepr a
+
+boxOrthoIn' :: (AtomicLogic a, AtomicLogic b) => [BoxProduct a b] -> FreeProduct a b -> [BoxProduct a b]
+boxOrthoIn' el (FreeProd a b) = [boxFromReprIn el $ (a <> ortho b) <+> (ortho a <> b) <+> (ortho a <> ortho b)]
+boxOrthoIn' el (FreePlus a b) = concat [boxOrthoIn' el a, boxOrthoIn' el b]
+
+--
+-- Other stuff
+--
 
 (<->) :: (Logic a) => a -> a -> a
 b <-> a = fromJust $ b /\ ortho a
@@ -275,7 +307,7 @@ b <-> a = fromJust $ b /\ ortho a
 createStaticBoxProduct :: (Repr a, Repr b, AtomicLogic a, AtomicLogic b) => String -> [BoxProduct a b] -> [BoxProduct a b] -> String
 createStaticBoxProduct name at el = unlines $ ["import QLogic", dataline, finiteinstance, posetinstance, logicinstance, atomicinstance]
         where
-            dataline = "data TwoTwoBoxWorld = " ++ (intercalate " | " $ map repr el) ++ " deriving (Enum, Bounded, Eq, Show)"
+            dataline = "data " ++ name ++ " = " ++ (intercalate " | " $ map repr el) ++ " deriving (Enum, Bounded, Eq, Show)"
             finiteinstance = "instance Finite TwoTwoBoxWorld where\n"
                                 ++ indent ++ "elements = [minBound..]\n" 
             posetinstance = "instance Poset TwoTwoBoxWorld where\n" ++ (unlines $ map posetRelation el) ++ indent ++ "_ .<. _ = False\n"
@@ -287,6 +319,6 @@ createStaticBoxProduct name at el = unlines $ ["import QLogic", dataline, finite
                                 ++ indent ++ "atoms = [" ++ (intercalate ", " $ map repr $ at) ++ "]\n"
 
             posetRelation a = unlines $ map (\b -> indent ++ (repr a) ++ " .<. " ++ (repr b) ++ " = True") $ filter (a .<.) el
-            orthoOf a = indent ++ "ortho " ++ (repr a) ++ " = " ++ (repr $ ortho a)
+            orthoOf a = indent ++ "ortho " ++ (repr a) ++ " = " ++ (repr $ orthoIn el a)
             indent = "    "
 
