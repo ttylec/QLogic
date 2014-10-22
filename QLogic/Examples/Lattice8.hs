@@ -49,3 +49,5 @@ instance Logic Lattice8 where
 
 instance AtomicLogic Lattice8 where
         atoms = [X1, X0, Y1, Y0, Z0, Z1]
+
+instance FiniteLogic Lattice8 where

@@ -5,61 +5,66 @@ import QLogic.BoxProduct
 
 import Data.List
 
-mathematicaForm' :: FreeProduct Lattice4 Lattice4 -> String
-mathematicaForm' (FreeProd x y)  
-        | x == one && y == one = "question[1]"
-        | x == zero && y == zero = "question[0]"
-        | otherwise = "question[{" ++ (show a) ++ ", " ++ (show b) ++ "}, {"
-            ++ (show alpha) ++ ", " ++ (show beta) ++ "}]"
-        where
-            (a, alpha) = decode x
-            (b, beta) = decode y
-            decode X0 = (1, 1)
-            decode X1 = (1, 2)
-            decode Y0 = (2, 1)
-            decode Y1 = (2, 2)
+class MathForm a where
+        mathForm :: a -> String
+        mathRawTuple :: a -> (Int, Int)
 
-mathematicaForm' a@(FreePlus _ _) = "CirclePlus[" 
-    ++ (intercalate ", " $ map mathematicaForm' $ freeToList a)
-    ++ "]"
+instance MathForm Lattice4 where
+        mathRawTuple X0 = (1, 1)
+        mathRawTuple X1 = (1, 2)
+        mathRawTuple Y0 = (2, 1)
+        mathRawTuple Y1 = (2, 2)
+        mathForm One = "question[1]"
+        mathForm Zero = "question[0]"
+        mathForm x = "question[" ++ (show a) ++ ", " ++ (show alpha) ++ "]"
+            where
+                (a, alpha) = mathRawTuple x
 
-mathForm :: BoxProduct Lattice4 Lattice4 -> String
-mathForm = mathematicaForm' . boxToRepr
+instance (FiniteLogic a, FiniteLogic b, MathForm a, MathForm b) => MathForm (FreeProduct a b) where
+        mathForm a@(FreeProd x y) 
+            | x == one && y == one = "question[1]"
+            | x == zero && y == zero = "question[0]"
+            | otherwise = "question[{" ++ (show a) ++ ", " ++ (show b) ++ "}, {"
+                ++ (show alpha) ++ ", " ++ (show beta) ++ "}]"
+            where
+                (a, alpha) = mathRawTuple x
+                (b, beta) = mathRawTuple y
 
-getGreaterThanList :: BoxProduct Lattice4 Lattice4 -> String
-getGreaterThanList a = "{" ++ (mathForm a) ++ ", {" 
-    ++ (intercalate ", " $ map mathForm $ greaterThan a)  ++ "}, "
-    ++ (mathForm $ ortho a ) ++ "}"
+        mathForm a@(FreePlus _ _) = "CirclePlus[" 
+            ++ (intercalate ", " $ map mathForm $ freeToList a)
+            ++ "]"
+
+instance (FiniteLogic a, FiniteLogic b, MathForm a, MathForm b) => MathForm (BoxProduct a b) where
+        mathForm = mathForm . boxRepr
+
+formatPosetStructure :: (FiniteLogic a, FiniteLogic b, MathForm a, MathForm b) => 
+    [BoxProduct a b] -> BoxProduct a b -> String
+formatPosetStructure set a = "{" ++ (mathForm a) ++ ", {" 
+    ++ (intercalate ", " $ map mathForm $ greaterThanIn set a)  ++ "}, "
+    ++ (mathForm $ orthoIn set a ) ++ "}"
 
 exportPosetStructure :: [BoxProduct Lattice4 Lattice4] -> String
-exportPosetStructure a = "{" ++
-    (intercalate ", " $ map getGreaterThanList a)
+exportPosetStructure set = "{" ++
+    (intercalate ", " $ map (formatPosetStructure set) set)
     ++ "}"
 
 main :: IO ()
 main = do
         let bwo = (elements :: [BoxProduct Lattice4 Lattice4])
             ats = (atoms :: [BoxProduct Lattice4 Lattice4])
-            test_elements = (testElements :: [BoxProduct Lattice4 Lattice4])
+            -- bwo = (boxProductElements :: [BoxProduct Lattice4 Lattice4])
 
-        putStrLn $ createStaticBoxProduct "TestTwoTwoBoxWorld" ats bwo
+        putStrLn $ exportPosetStructure bwo
+        -- putStrLn $ createStaticBoxProduct "TestTwoTwoBoxWorld" ats bwo
 
-        -- putStrLn $ unlines $ map (mathematicaForm' . boxToRepr) bwo_elements
-        
-        -- putStrLn $ show (elements :: [BoxProduct Lattice4 Lattice4])
-        -- putStrLn $ unlines $ map 
-        --     (\a -> "ortho " ++ (show a) ++ " = " ++ (show $ orthoIn bwo a)) --(show $ orthoCandidates a)) 
-        --     bwo
-            -- (elements :: [TwoTwoBoxWorld])
--- 
---         putStrLn "Now let's check if our proposal of orthocompletion is idempotent"
---         putStrLn $ if all (\p -> (ortho . ortho $ p) == p) bwo_elements then "Yes!" else "No..."
--- 
---         putStrLn "Check order reverse"
---         putStrLn $ if checkOrderReverse bwo_elements then "Yes!" else "No..."
--- 
---         putStrLn "Check supremums"
---         putStrLn $ if checkSupremum bwo_elements then "Yes!" else "No..."
--- 
---         putStrLn "Orthomodularity check"
---         putStrLn $ if checkOrthomodular bwo_elements then "Yes!" else "No..."
+        -- putStrLn $ "L2"
+        -- putStrLn $ if checkOrderReverse bwo then "Yes!" else "No..."
+
+        -- putStrLn $ "L3"
+        -- putStrLn $ if checkOrthoIdempotence bwo then "Yes!" else "No..."
+
+        -- putStrLn $ "L4"
+        -- putStrLn $ if checkSupremum bwo then "Yes!" else "No..."
+
+        -- putStrLn $ "L5"
+        -- putStrLn $ if checkOrthomodular bwo then "Yes!" else "No..."
