@@ -273,6 +273,33 @@ boxOrthoIn' el (FreePlus a b) = concat [boxOrthoIn' el a, boxOrthoIn' el b]
 -- Other stuff
 --
 
+createStaticData :: (Repr a, Repr b, FiniteLogic a, FiniteLogic b) => String -> [BoxProduct a b] -> [BoxProduct a b] -> String
+createStaticData name at el = unlines $ [dataline, finiteinstance]
+        where
+            dataline = "data " ++ name ++ " = " ++ (intercalate " | " $ map repr el) ++ " deriving (Enum, Bounded, Eq, Show)"
+            finiteinstance = "instance Finite TwoTwoBoxWorld where\n"
+                                ++ indent ++ "elements = [minBound..]\n" 
+            indent = "    "
+
+createStaticPoset :: (Repr a, Repr b, FiniteLogic a, FiniteLogic b) => String -> [BoxProduct a b] -> String
+createStaticPoset name el = posetinstance
+        where
+            posetinstance = "instance Poset " ++ name ++ " where\n" ++ (unlines $ map posetRelation el) ++ indent ++ "_ .<. _ = False\n"
+            posetRelation a = unlines $ map (\b -> indent ++ (repr a) ++ " .<. " ++ (repr b) ++ " = True") $ filter (a .<.) el
+            indent = "    "
+
+createStaticLogic :: (Repr a, Repr b, FiniteLogic a, FiniteLogic b) => String -> [BoxProduct a b] -> [BoxProduct a b] -> String
+createStaticLogic name at el = unlines $ [logicinstance, atomicinstance]
+        where
+            logicinstance = "instance Logic TwoTwoBoxWorld where\n"
+                                ++ indent ++ "zero = " ++ (repr $ el !! 0) ++ "\n"
+                                ++ indent ++ "one = " ++ (repr $ el !! 1) ++ "\n"
+                                ++ (unlines $ map orthoOf el) ++ "\n"
+            atomicinstance = "instance AtomicLogic TwoTwoBoxWorld where\n"
+                                ++ indent ++ "atoms = [" ++ (intercalate ", " $ map repr $ at) ++ "]\n"
+            orthoOf a = indent ++ "ortho " ++ (repr a) ++ " = " ++ (repr $ orthoIn el a)
+            indent = "    "
+
 createStaticBoxProduct :: (Repr a, Repr b, FiniteLogic a, FiniteLogic b) => String -> [BoxProduct a b] -> [BoxProduct a b] -> String
 createStaticBoxProduct name at el = unlines $ ["import QLogic", dataline, finiteinstance, posetinstance, logicinstance, atomicinstance]
         where
