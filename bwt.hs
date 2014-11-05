@@ -1,5 +1,5 @@
 import QLogic
-import QLogic.Examples.Lattice4
+import QLogic.Examples.Lattice8
 import QLogic.TwoTwoBoxWorld
 import QLogic.BoxProduct
 
@@ -9,11 +9,13 @@ class MathForm a where
         mathForm :: a -> String
         mathRawTuple :: a -> (Int, Int)
 
-instance MathForm Lattice4 where
+instance MathForm Lattice8 where
         mathRawTuple X0 = (1, 1)
         mathRawTuple X1 = (1, 2)
         mathRawTuple Y0 = (2, 1)
         mathRawTuple Y1 = (2, 2)
+        mathRawTuple Z0 = (3, 1)
+        mathRawTuple Z1 = (3, 2)
         mathForm One = "question[1]"
         mathForm Zero = "question[0]"
         mathForm x = "question[" ++ (show a) ++ ", " ++ (show alpha) ++ "]"
@@ -43,29 +45,30 @@ formatPosetStructure set a = "{" ++ (mathForm a) ++ ", {"
     ++ (intercalate ", " $ map mathForm $ greaterThanIn set a)  ++ "}, "
     ++ (mathForm $ orthoIn set a ) ++ "}"
 
-exportPosetStructure :: [BoxProduct Lattice4 Lattice4] -> String
+exportPosetStructure :: (FiniteLogic a, FiniteLogic b, MathForm a, MathForm b) => [BoxProduct a b] -> String
 exportPosetStructure set = "{" ++
     (intercalate ", " $ map (formatPosetStructure set) set)
     ++ "}"
 
 main :: IO ()
 main = do
-        let bwo = (elements :: [BoxProduct Lattice4 Lattice4])
-            ats = (atoms :: [BoxProduct Lattice4 Lattice4])
+        let els = (elements :: [BoxProduct Lattice8 Lattice8])
+            ats = (atoms :: [BoxProduct Lattice8 Lattice8])
             -- bwo = (boxProductElements :: [BoxProduct Lattice4 Lattice4])
 
-        -- putStrLn $ show $ length bwo
-        putStrLn $ exportPosetStructure bwo
+        putStrLn $ show $ length els 
+        putStrLn $ show $ length ats 
+        -- putStrLn $ exportPosetStructure els
         -- putStrLn $ createStaticBoxProduct "TestTwoTwoBoxWorld" ats bwo
 
         -- putStrLn $ "L2"
-        -- putStrLn $ if checkOrderReverse bwo then "Yes!" else "No..."
+        -- putStrLn $ if checkOrderReverse els then "Yes!" else "No..."
 
         -- putStrLn $ "L3"
-        -- putStrLn $ if checkOrthoIdempotence bwo then "Yes!" else "No..."
+        -- putStrLn $ if checkOrthoIdempotence els then "Yes!" else "No..."
 
         -- putStrLn $ "L4"
-        -- putStrLn $ if checkSupremum bwo then "Yes!" else "No..."
+        -- putStrLn $ if checkSupremum els then "Yes!" else "No..."
 
         -- putStrLn $ "L5"
-        -- putStrLn $ if checkOrthomodular bwo then "Yes!" else "No..."
+        -- putStrLn $ if checkOrthomodular els then "Yes!" else "No..."
