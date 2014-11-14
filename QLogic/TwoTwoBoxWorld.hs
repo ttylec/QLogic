@@ -761,4 +761,4 @@ instance Logic TwoTwoBoxWorld where
 instance AtomicLogic TwoTwoBoxWorld where
     atoms = [X1X1, X1X0, X1Y1, X1Y0, X0X1, X0X0, X0Y1, X0Y0, Y1X1, Y1X0, Y1Y1, Y1Y0, Y0X1, Y0X0, Y0Y1, Y0Y0]
 
-
+instance FiniteLogic TwoTwoBoxWorld where
