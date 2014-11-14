@@ -176,17 +176,12 @@ instance (Repr a, Repr b) => Repr (FreeProduct a b) where
         repr (FreePlus a p) = (repr a) ++ "plus" ++ (repr p)
 
 instance (Poset a, Poset b) => Eq (FreeProduct a b) where
-        (FreeProd a b) == (FreeProd c d) = a == c && b == d
-        a == b = (all (`elem` blist) alist) && (all (`elem` alist) blist)
-            where
-                alist = freeToList a
-                blist = freeToList b
-        -- a == b = a .<. b && b .<. a
+        a == b = a .<. b && b .<. a
 
--- instance (Poset a, Poset b) => Poset (FreeProduct a b) where
---         (FreeProd a1 a2) .<. (FreeProd b1 b2) = a1 .<. b1 && a2 .<. b2
---         a@(FreeProd _ _) .<. (FreePlus b bs) = a .<. b || a .<. bs
---         (FreePlus a as) .<. b = a .<. b && as .<. b
+instance (Poset a, Poset b) => Poset (FreeProduct a b) where
+        (FreeProd a1 a2) .<. (FreeProd b1 b2) = a1 .<. b1 && a2 .<. b2
+        a@(FreeProd _ _) .<. (FreePlus b bs) = a .<. b || a .<. bs
+        (FreePlus a as) .<. b = a .<. b && as .<. b
 
 (<>) :: (Logic a, Logic b) => a -> b -> FreeProduct a b
 (<>) a b
