@@ -79,11 +79,11 @@ transposeSystems (FreePlus a as) = transposeSystems a <+> transposeSystems as
 boxQuestions :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b]
 boxQuestions qla qlb = nub $ zerozero:oneone:others 
         where
-            zerozero = zero qla <> zero qlb
-            oneone = one qla <> one qlb
+            zerozero = zeroOf qla <> zeroOf qlb
+            oneone = oneOf qla <> oneOf qlb
             ql = (qla, qlb)
             others = concat $ takeWhile ((> 1) . length) $ iterate (makeAdmissibleSums ql pairs) pairs 
-            pairs = [a <> b | a <- elements qla, b <- elements qlb, a /= zero qla, b /= zero qlb]
+            pairs = [a <> b | a <- elementsOf qla, b <- elementsOf qlb, a /= zeroOf qla, b /= zeroOf qlb]
 
 -- | Returns the list of questions formed by atoms in box product of
 -- two logics. TODO: it's not clear if this gives equivalent structure
@@ -91,10 +91,10 @@ boxQuestions qla qlb = nub $ zerozero:oneone:others
 boxAtomicQuestions :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b]
 boxAtomicQuestions qla qlb = nub $ z:other
        where
-           z = zero qla <> zero qlb
+           z = zeroOf qla <> zeroOf qlb
            ql = (qla, qlb)
            other = concat $ takeWhile ((>1) . length) $ iterate (makeAdmissibleSums ql boxAtoms) boxAtoms
-           boxAtoms = [a <> b | a <- atoms qla, b <- atoms qlb]
+           boxAtoms = [a <> b | a <- atomsOf qla, b <- atomsOf qlb]
            
 makeAdmissibleSums  _ [] qs = []
 makeAdmissibleSums  ql (p:ps) qs = (makeAdmissibleSums' ql p qs) ++ (makeAdmissibleSums ql ps qs)
@@ -102,32 +102,32 @@ makeAdmissibleSums' ql p qs = map (p <+>) $ filter (boxOrthogonal ql p) qs
 
 -- | Orthogonality relation in construction of box product
 boxOrthogonal :: (Ord a, Ord b) => (QLogic a, QLogic b) -> FreeProduct a b -> FreeProduct a b -> Bool
-boxOrthogonal (qla, qlb) (FreeProd a1 a2) (FreeProd b1 b2) = (isOrthoIn qla a1 b1) || (isOrthoIn qlb a2 b2)
+boxOrthogonal (qla, qlb) (FreeProd a1 a2) (FreeProd b1 b2) = (orthoIn qla a1 b1) || (orthoIn qlb a2 b2)
 boxOrthogonal ql a@(FreeProd _ _) (FreePlus b bs) = (boxOrthogonal ql a b) && (boxOrthogonal ql a bs)
 boxOrthogonal ql (FreePlus a as) b = (boxOrthogonal ql a b) && (boxOrthogonal ql as b)
 
 rightOf :: (Ord a, Ord b) => (QLogic a, QLogic b) -> a -> FreeProduct a b -> FreeProduct a b
 rightOf ql@(qla, qlb) c a
-    | c /= zero qla = c <> rightOf' ql (zero qlb) c a
-    | otherwise = c <> one qlb 
+    | c /= zeroOf qla = c <> rightOf' ql (zeroOf qlb) c a
+    | otherwise = c <> oneOf qlb 
 
 rightOf' (qla, qlb) accum c (FreeProd a b)
-    | c ≤ a = fromJust $ supIn qlb accum b
+    | a ≥ c = fromJust $ supIn qlb accum b
     | otherwise = accum
     where
-        (QLogic _ (≤) _) = qla
+        (≥) = flip $ lessIn qla
 rightOf' qlb accum c (FreePlus a as) = rightOf' qlb (rightOf' qlb accum c a) c as
 
 leftOf :: (Ord a, Ord b) => (QLogic a, QLogic b) -> b -> FreeProduct a b -> FreeProduct a b
 leftOf ql@(qla, qlb) d b
-    | d /= zero qlb = leftOf' ql (zero qla) d b <> d
-    | otherwise = one qla <> d
+    | d /= zeroOf qlb = leftOf' ql (zeroOf qla) d b <> d
+    | otherwise = oneOf qla <> d
 
 leftOf' (qla, qlb) accum d (FreeProd a b)
-    | d ≤ b = fromJust $ supIn qla accum a
+    | b ≥ d = fromJust $ supIn qla accum a
     | otherwise = accum
     where
-        (QLogic _ (≤) _) = qlb
+        (≥) = flip $ lessIn qlb
 leftOf' qla accum d (FreePlus a as) = leftOf' qla (leftOf' qla accum d a) d as
 
 freePlusToList :: (Ord a, Ord b) => FreeProduct a b -> [FreeProduct a b]
@@ -155,8 +155,8 @@ reduceLeft ql = transposeSystems . (reduceRight ql) . transposeSystems
 boxPrec :: (Ord a, Ord b) => (QLogic a, QLogic b) -> FreeProduct a b -> FreeProduct a b -> Bool
 boxPrec (qla, qlb) (FreeProd a b) (FreeProd c d) = a `leftLess` c && b `rightLess` d
     where
-        (QLogic _ leftLess _) = qla
-        (QLogic _ rightLess _) = qlb
+        leftLess = lessIn qla
+        rightLess = lessIn qlb
 boxPrec ql ab@(FreeProd a b) p = (boxPrec ql ab (leftOf ql b p)) || (boxPrec ql ab (rightOf ql a p))
 boxPrec ql (FreePlus a as) p = (boxPrec ql a p) && (boxPrec ql as p)
 
@@ -166,8 +166,8 @@ boxPrec ql (FreePlus a as) p = (boxPrec ql a p) && (boxPrec ql as p)
 boxAtomicPrec :: (Ord a, Ord b) => (QLogic a, QLogic b) -> FreeProduct a b -> FreeProduct a b -> Bool
 boxAtomicPrec (qla, qlb) (FreeProd a b) (FreeProd c d) =  a `leftLess` c && b `rightLess` d
     where
-        (QLogic _ leftLess _) = qla
-        (QLogic _ rightLess _) = qlb
+        leftLess = lessIn qla
+        rightLess = lessIn qlb
 boxAtomicPrec ql@(qla, qlb) ab@(FreeProd a b) p = leftLess || rightLess
     where
         leftLess = boxPrec ql ab $ leftOf ql b $ reduceRight qlb p
@@ -187,22 +187,21 @@ boxAtomicProduct qla qlb = boxProduct' qla qlb $ boxAtomicQuestions qla qlb
 boxProduct' :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b] -> QLogic (BoxProduct a b)
 boxProduct' qla qlb questions = boxLogic 
     where
-        boxLogic = QLogic boxElems boxLess boxOrtho
+        boxLogic = fromList boxElems boxLess boxOrtho
         (Poset boxElems boxLess) = quotientLogic (PrePoset questions preorder) 
         preorder = preOrder questions $ boxPrec (qla, qlb)
 
-        boxOrtho a = fromJust $ find (isOrtho a) boxElems 
-        isOrtho a b = case boxPlus boxLogic a b of
-                          Nothing -> False
-                          Just c -> isEquivIn boxLogic c $ boxOne 
-        boxOne = one boxLogic
-        -- z = zero boxLogic
+        boxOrtho a = fromJust $ find (goodOrtho a) boxElems 
+        goodOrtho a b = case boxPlus boxLogic a b of
+                            Nothing -> False
+                            Just c -> equalIn boxLogic c $ boxOne 
+        boxOne = oneOf boxLogic
 
 boxPlus :: (Ord a, Ord b) => QLogic (BoxProduct a b) -> BoxProduct a b -> BoxProduct a b -> Maybe (BoxProduct a b)
 boxPlus ql a b 
-    | a == zero ql = Just b
-    | b == zero ql = Just a
-    | otherwise = equivLookup (elements ql) $ (equivRepr a) <+> (equivRepr b)
+    | a == zeroOf ql = Just b
+    | b == zeroOf ql = Just a
+    | otherwise = equivLookup (elementsOf ql) $ (equivRepr a) <+> (equivRepr b)
 
 data Poset a where
         Poset :: (Ord a) => [a] -> (a -> a -> Bool) -> Poset a 

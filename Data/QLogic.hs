@@ -53,70 +53,88 @@ infix 4 ≥
 -- that takes quantum logic as an argument also assumes that
 -- the above axioms are satisfied.
 --
--- > QLogic elements partialOrderRelation orthocompletion
+-- > QLogic elements partialOrderRelation orthocompletion min max
 data QLogic a where
-       QLogic :: (Ord a) => [a] -> (a -> a -> Bool) -> (a -> a) -> QLogic a
+       QLogic :: (Ord a) => [a] -> (a -> a -> Bool) -> (a -> a) -> a -> a -> QLogic a
 
 instance (Show a) => Show (QLogic a) where
-        show omp@(QLogic els rel omap) = "elements:\n" ++ (show $ els) ++ "\n" ++
+        show ql = "elements:\n" ++ (show $ els) ++ "\n" ++
             "\ngreater than lists:\n" ++ (unlines $ gtlists) ++
             "\northocompletions:\n" ++ (unlines $ olists)
             where
-                gtlists = map (\a -> (show a) ++ "| " ++ (show $ greaterThan omp a)) els
+                gtlists = map (\a -> (show a) ++ "| " ++ (show $ greaterThan ql a)) els
                 olists = map (\a -> (show a) ++ "C = " ++ (show $ omap a)) els
+                els = elementsOf ql
+                rel = lessIn ql
+                omap = ocmplIn ql
 
 -- | Construct quantum logic from the list of partialy ordered elements. 
 -- Orthocompletion map must be given explicitly.
 fromPOrd :: (Eq a, POrd a) => [a] -> (a -> a) -> QLogic a
-fromPOrd els omap = QLogic els (≤) omap
+fromPOrd els omap = qlogic
+    where
+        qlogic = QLogic els (≤) omap min max
+        min = head $ minimalIn qlogic els
+        max = head $ maximalIn qlogic els
+
+fromList :: (Ord a) => [a] -> (a -> a -> Bool) -> (a -> a) -> QLogic a
+fromList els order omap = qlogic 
+    where
+        qlogic = QLogic els order omap min max
+        min = head $ minimalIn qlogic els
+        max = head $ maximalIn qlogic els
 
 -- = Getting elements
 -- | List of elements in quantum logic
-elements :: QLogic a -> [a]
-elements (QLogic els _ _) = els
+elementsOf :: QLogic a -> [a]
+elementsOf (QLogic els _ _ _ _) = els
 
--- | List of atoms in logic,
--- i.e. elements covering zero.
-atoms :: QLogic a -> [a]
-atoms ql@(QLogic els rel _) = minimalIn ql $ filter (not . (isEquivIn ql z)) els
-    where
-        z = zero ql
+-- | Order relation in quantum logic
+lessIn :: QLogic a -> (a -> a -> Bool)
+lessIn (QLogic _ rel _ _ _) = rel
+
+equalIn :: QLogic a -> (a -> a -> Bool)
+equalIn ql a b = lessIn ql a b && lessIn ql b a
+
+-- | Orthocompletion in quantum logic
+ocmplIn :: QLogic a -> (a -> a)
+ocmplIn (QLogic _ _ omap _ _) = omap
 
 -- | The least element of quantum logic
-zero :: QLogic a -> a
-zero ql@(QLogic els _ _) = head $ minimalIn ql els
+zeroOf :: QLogic a -> a
+zeroOf (QLogic _ _ _ z _) = z
 
 -- | The greatest element of quantum logic
-one :: QLogic a -> a
-one ql@(QLogic els _ _) = head $ maximalIn ql els
+oneOf :: QLogic a -> a
+oneOf (QLogic _ _ _ _ o) = o
+
+-- = Quering quantum logic
+--
+-- | List of atoms in logic,
+-- i.e. elements covering zero.
+atomsOf :: QLogic a -> [a]
+atomsOf ql = minimalIn ql $ filter (not . (equalIn ql z)) $ elementsOf ql
+    where
+        z = zeroOf ql
 
 -- | List of elements in quantum logic that are greater than given element
 greaterThan :: QLogic a -> a -> [a]
-greaterThan (QLogic els rel _) a = filter (a `rel`) els 
-
--- = Quering quantum logic
-
--- | Tests if elements are in order in given logic
-isLessIn :: QLogic a -> a -> a -> Bool
-isLessIn (QLogic _ rel _) a b = a `rel` b
-
--- | Tests if elements are equivalent in logic
-isEquivIn :: QLogic a -> a -> a -> Bool
-isEquivIn (QLogic _ rel _) a b= a `rel` b && b `rel` a
+greaterThan ql a = filter (lessIn ql a) $ elementsOf ql
 
 -- |Returns true if given two elements are orthogonal in set
-isOrthoIn :: QLogic a -> a -> a -> Bool
-isOrthoIn (QLogic _ rel omap) p q = p `rel` (omap q)
+orthoIn :: QLogic a -> a -> a -> Bool
+orthoIn ql p q = lessIn ql p (ocmplIn ql q)
 
 -- = Partialy ordered set operations
 
 -- | Lowest upper bound of pair of elements (join).
 supIn :: QLogic a -> a -> a -> Maybe a
-supIn omp@(QLogic els rel _) a b  
+supIn ql a b  
     | length lub == 1 = Just $ head lub
     | otherwise = Nothing
     where
-        lub = minimalIn omp $ filter (b `rel`) $ filter (a `rel`) els
+        lub = minimalIn ql $ filter (b ≤) $ filter (a ≤) $ elementsOf ql
+        (≤) = lessIn ql
 
 -- | Unsafe lowest upper bound: assumes that it exists.
 unsafeSupIn :: QLogic a -> a -> a -> a
@@ -128,9 +146,11 @@ unsafeSupIn ql a b = fromJust $ supIn ql a b
 minimalIn :: QLogic a -> [a] -> [a]
 minimalIn _ [] = []
 minimalIn _ [a] = [a]
-minimalIn omp@(QLogic _ rel _) (a:as)
-    | any (`rel` a) as = minimalIn omp as
-    | otherwise = a:(minimalIn omp $ filter (not . (a `rel`)) as)
+minimalIn ql (a:as)
+    | any (≤ a) as = minimalIn ql as
+    | otherwise = a:(minimalIn ql $ filter (not . (a ≤)) as)
+    where
+        (≤) = lessIn ql
 
 -- | Returns subset of maximal elements in given set,
 -- i.e. element that are not less than any of the
@@ -138,10 +158,13 @@ minimalIn omp@(QLogic _ rel _) (a:as)
 maximalIn :: QLogic a -> [a] -> [a]
 maximalIn _ [] = []
 maximalIn _ [a] = [a]
-maximalIn omp@(QLogic _ rel _) (a:as)
-    | any (a `rel`) as = maximalIn omp as
-    | otherwise = a:(maximalIn omp $ filter (not . (`rel` a)) as)
+maximalIn ql (a:as)
+    | any (a ≤) as = maximalIn ql as
+    | otherwise = a:(maximalIn ql $ filter (not . (≤ a)) as)
+    where
+        (≤) = lessIn ql
 
+-- = Auxialliary data structures
 
 -- | Data type for more efficient implementation of
 -- quantum logic structure. Elements are represented
@@ -155,8 +178,11 @@ data PQLogic = PQLogic Int Relation OrthoMap deriving (Show)
 -- used to convert between elements of QLogic 
 -- and integers used by PQLogic.
 packQLogic :: (Ord a) => QLogic a -> (Packed a, PQLogic)
-packQLogic (QLogic els rel omap) = (idx, PQLogic n pRel pOmap)
+packQLogic ql = (idx, PQLogic n pRel pOmap)
     where
+        els = elementsOf ql
+        rel = lessIn ql
+        omap = ocmplIn ql
         n = length els
         idx = packList els
         pRel = relationFromFunction n (packRel idx rel)
