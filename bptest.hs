@@ -1,23 +1,37 @@
-import QLogic
-import Poset
-import QLogic.Examples.Lattice4
-import QLogic.TwoTwoBoxWorld
-import qualified Data.Vector as V
-import Data.List
+import Data.QLogic
+-- import Data.QLogic.BoxProductPOrd
+import Data.QLogic.BoxProduct
+import qualified Data.QLogic.BoxProductPOrd as POrd
+
 
 main :: IO ()
 main = do
-        let ela = elements :: [Lattice4]
-            elb = atoms :: [TwoTwoBoxWorld]
-            pairs = [a <> b | a <- ela, b <- elb, a /= zero, b /= zero]
-            boxes@(BoxProduct (boxPropositions, _)) = boxProduct ela ela
-            boxElems = V.fromList $ boxQuestions ela ela
-            boxElems1 = nub $ makeAdmissibleSums pairs pairs
-            -- boxPreRel = relationFromFunction boxElems boxLess
-            -- boxRel = transitiveClosure boxPreRel
-            -- (boxProp, boxPRel) = quotientSet (boxElems, boxRel)
-            
-        V.mapM_ (\a -> let b = reprOf a in putStrLn $ show $ (b, boxOrtho boxes b)) boxPropositions
-        -- putStrLn $ show $ V.length boxElems
-        -- putStrLn $ show boxProp
-        -- putStrLn $ show $ V.length boxProp
+        let qla = lanternLogic
+            bwo = boxProduct qla qla
+            q1 = boxQuestions qla qla
+            q2 = POrd.boxQuestions qla qla
+            n1 = length q1
+            n2 = length q2
+            packed1 = packList q1
+            packed2 = packList q2
+            ppo1 = transitiveClosure $ relationFromFunction n1 $ packRel packed1 $ boxPrec (qla, qla)
+            ppo2 = transitiveClosure $ relationFromFunction n2 $ packRel packed2 $ POrd.boxPrec (qla, qla)
+            o1 = unpackRel packed1 (relLess ppo1)
+            o2 = unpackRel packed2 (relLess ppo2)
+            pr1 = relationFromFunction n1 $ packRel packed1 $ boxPrec (qla, qla)
+            pr2 = relationFromFunction n2 $ packRel packed2 $ POrd.boxPrec (qla, qla)
+            pairs1 = [(a, b) | a <- q1, b <- q1]
+            pairs2 = [(a, b) | a <- q2, b <- q2]
+            pairLess1 = uncurry $ boxPrec (qla, qla)
+            pairLess2 = uncurry $ POrd.boxPrec (qla, qla)
+
+        -- putStrLn $ unlines $ map show $ zip q1 q2
+        -- putStrLn $ unlines $ map show $ filter (\(x, y) -> pairLess1 x /= pairLess2 y) $ zip pairs1 pairs2
+        -- putStrLn $ show $ o1 (X1<>X1) (X0<>One)
+        -- putStrLn $ show $ o2 (X1 POrd.<> X1) (X0 POrd.<> One)
+        -- putStrLn $ show $ elements $ bwo
+        putStrLn $ show $ length $ elements bwo
+        putStrLn $ show $ bwo
+        putStrLn $ show $ boxPlus bwo (zero bwo) (one bwo)
+        putStrLn $ show $ equivRepr $ zero bwo
+        putStrLn $ show $ equivRepr $ one bwo
