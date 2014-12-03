@@ -1,11 +1,21 @@
-{-# LANGUAGE GADTs, BangPatterns #-}
+{-# LANGUAGE GADTs, ExistentialQuantification #-}
 module BoxWorldLogicGenerator where
 
 import Data.Monoid
 
+import Control.Monad
 import Control.Monad.LPMonad
 import Data.LinearProgram
 import Data.LinearProgram.GLPK
+
+import Control.Monad.Trans.State.Strict (StateT)
+import Data.Functor.Identity (Identity)
+
+ssimplexDefaults = SimplexOpts MsgOff 10000 True
+
+-- I don't know why... Haskell type system said so, I add it to
+-- have explicit types everywhere
+data BWSolver a b = forall a1. BWSolver (StateT (LP (FreeProduct a b) Int) Identity a1)
 
 data Box2 = X0 | X1 | Y0 | Y1 deriving (Eq, Ord, Show)
 
@@ -23,6 +33,9 @@ data FreeProduct a b = (Ord a, Ord b) => FreeProd a b | FreePlus (FreeProduct a 
     | otherwise = FreePlus a $ b <+> bs
 (<+>) a@(FreePlus _ _) b@(FreeProd _ _) = FreePlus b a
 (<+>) a@(FreePlus a1 a2) b@(FreePlus _ _) = a1 <+> (a2 <+> b)
+
+infixr 8 <+>
+infix  9 /\
 
 freeToList :: FreeProduct a b -> [FreeProduct a b]
 freeToList a@(FreeProd _ _) = [a]
@@ -42,8 +55,6 @@ instance (Ord a, Ord b) => Ord (FreeProduct a b) where
 instance (Show a, Show b) => Show (FreeProduct a b) where
         show (FreeProd a b) = (show a) ++ (show b)
         show (FreePlus a p) = (show a) ++ "⊕" ++ (show p)
-
-boxQ = [[X0, X1], [Y0, Y1]]
 
 boxWorldLPVars :: (Ord a, Ord b) => [a] -> [b] -> [FreeProduct a b]
 boxWorldLPVars as bs = [a /\ b | a <- as, b <- bs]
@@ -67,19 +78,44 @@ nsRight :: (Ord a, Ord b) => [[a]] -> b ->
 nsRight aas b = pairs [varSum [a /\ b | a <- as] | as <- aas]
 
 isQuestionObj :: (Ord a, Ord b) => FreeProduct a b -> LinFunc (FreeProduct a b) Int
-isQuestionObj a = varSum $ freeToList a 
+isQuestionObj a@(FreeProd _ _) = var a
+isQuestionObj (FreePlus a as) = (var a) ^+^ isQuestionObj as
 
--- isQuestion lpsolver a 
---     | maxp > 1.0 = False
---     | otherwise = True
---     where
---         (_, Just (maxp, _)) = glpSolveVars simplexDefaults $ boxWorldLogicSolver lpsolver obj
---         obj = isQuestionObj a
+boxWorldLessObj :: (Ord a, Ord b) => FreeProduct a b -> FreeProduct a b -> LinFunc (FreeProduct a b) Int
+boxWorldLessObj a b = (isQuestionObj a) ^-^ (isQuestionObj b)
 
-isQuestion lpsolver a = glpSolveVars simplexDefaults $ boxWorldLogicSolver lpsolver obj
-    where
-        obj = isQuestionObj a
+isQuestion :: (Ord a, Ord b) => BWSolver a b -> FreeProduct a b -> IO Bool
+isQuestion (BWSolver lpsolver) a = do
+        (_, Just (maxp, _)) <- glpSolveVars ssimplexDefaults $ boxWorldLogicSolver lpsolver obj
+        -- putStrLn $ show $ obj
+        return (maxp <= 1.0)
+        where
+            obj = isQuestionObj a
 
+boxLess :: (Ord a, Ord b) => BWSolver a b -> 
+    FreeProduct a b -> FreeProduct a b -> IO Bool
+boxLess (BWSolver lpsolver) a b =  do
+        (_, Just (maxp, _)) <- {-# SCC solver #-} glpSolveVars ssimplexDefaults $ boxWorldLogicSolver lpsolver obj
+        return (not $ maxp > 0.0)
+        where
+            obj = boxWorldLessObj a b
+
+boxEqual :: (Ord a, Ord b) => BWSolver a b -> 
+    FreeProduct a b -> FreeProduct a b -> IO Bool
+boxEqual lp a b = liftM2 (&&) (boxLess lp a b) (boxLess lp b a)
+
+boxNotEqual :: (Ord a, Ord b) => BWSolver a b -> 
+    FreeProduct a b -> FreeProduct a b -> IO Bool
+boxNotEqual lp a b = liftM not $ boxEqual lp a b
+
+extendBWList :: (Ord a, Ord b) => (BWSolver a b) ->
+    [FreeProduct a b] -> [FreeProduct a b] -> IO [FreeProduct a b]
+extendBWList lpsolver qs atoms = do
+        qs <- filterM (isQuestion lpsolver) [q <+> a | q <- qs, a <- atoms]  
+        nubByM (boxEqual lpsolver) qs
+
+boxWorldAtoms :: (Ord a, Ord b) => [[a]] -> [[b]] -> [FreeProduct a b]
+boxWorldAtoms as bs = [a/\b | a <- (concat $ as), b <- (concat $bs)]
 
 boxWorldLogicSolver lpsolver obj = execLPM $ do
     lpsolver
@@ -88,21 +124,32 @@ boxWorldLogicSolver lpsolver obj = execLPM $ do
 boxWorldLogicGLPKSolver as bs = do
     let vars = boxWorldLPVars (concat as) (concat bs)
     setDirection Max
-    -- setObjective obj
     mapM_ (\f -> equalTo f 1) $ normalization as bs
     mapM_ (\(f, g) -> equal f g) $ nonsignalling as bs
     mapM_ (\v -> varGeq v 0) vars 
     mapM_ (\v -> setVarKind v ContVar) vars
 
--- boxWorldLogicSolver as bs obj = execLPM $ do
---     let vars = boxWorldLPVars (concat as) (concat bs)
---     setDirection Max
---     setObjective obj
---     mapM_ (\f -> equalTo f 1) $ normalization as bs
---     mapM_ (\(f, g) -> equal f g) $ nonsignalling as bs
---     mapM_ (\v -> varGeq v 0) vars 
---     mapM_ (\v -> setVarKind v ContVar) vars
+-- nubByM :: (Monad m) => (a -> a -> m Bool) -> m [a] -> m [a]
+-- nubByM eq mas = do
+--         (a:as) <- mas
+--         noteq <- filterM ((liftM not) . (eq a)) as
+--         
+--         liftM2 (:) (return a) (nubByM eq noteq)
+
+nubByM :: (Monad m) => (a -> a -> m Bool) -> [a] -> m [a]
+nubByM eq [] = return []
+nubByM eq (a:as) = do
+        noteq <- filterM ((liftM not) . (eq a)) as
+        liftM (a:) (nubByM eq noteq)
 
 pairs :: [a] -> [(a, a)]
 pairs [] = []
 pairs (a:as) = (map (\b -> (a, b)) as) ++ pairs as
+
+
+--
+-- Defs for testing
+--
+boxQ = [[X0, X1], [Y0, Y1]]
+atoms = boxWorldAtoms boxQ boxQ 
+lps = BWSolver $ boxWorldLogicGLPKSolver boxQ boxQ
