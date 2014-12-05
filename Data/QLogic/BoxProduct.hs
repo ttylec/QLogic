@@ -51,8 +51,8 @@ infixl 5 <>
 (<+>) a@(FreeProd _ _) b@(FreeProd _ _)
     | a <= b = FreePlus a b
     | otherwise = FreePlus b a
-(<+>) a@(FreeProd _ _) b@(FreePlus b0 bs)
-    | a <= b = FreePlus a b
+(<+>) a@(FreeProd _ _) p@(FreePlus b bs)
+    | a <= b = FreePlus a p
     | otherwise = FreePlus b (a <+> bs)
 (<+>) a@(FreePlus _ _) b@(FreeProd _ _) = b <+> a
 (<+>) a@(FreePlus a1 a2) b@(FreePlus _ _) = a1 <+> (a2 <+> b)
