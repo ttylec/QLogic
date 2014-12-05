@@ -77,28 +77,35 @@ transposeSystems (FreePlus a as) = transposeSystems a <+> transposeSystems as
 
 -- | Returns the list of all questions in box product of two logics.
 boxQuestions :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b]
-boxQuestions qla qlb = nub $ zerozero:oneone:others 
+boxQuestions qla qlb = zerozero:boxQuestions' ortho pairs
         where
             zerozero = zeroOf qla <> zeroOf qlb
-            oneone = oneOf qla <> oneOf qlb
-            ql = (qla, qlb)
-            others = concat $ takeWhile ((> 1) . length) $ iterate (makeAdmissibleSums ql pairs) pairs 
+            ortho = boxOrthogonal (qla, qlb)
             pairs = [a <> b | a <- elementsOf qla, b <- elementsOf qlb, a /= zeroOf qla, b /= zeroOf qlb]
 
 -- | Returns the list of questions formed by atoms in box product of
 -- two logics. TODO: it's not clear if this gives equivalent structure
 -- as taing boxQuestions. 
 boxAtomicQuestions :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b]
-boxAtomicQuestions qla qlb = nub $ z:other
-       where
-           z = zeroOf qla <> zeroOf qlb
-           ql = (qla, qlb)
-           other = concat $ takeWhile ((>1) . length) $ iterate (makeAdmissibleSums ql boxAtoms) boxAtoms
-           boxAtoms = [a <> b | a <- atomsOf qla, b <- atomsOf qlb]
-           
-makeAdmissibleSums  _ [] qs = []
-makeAdmissibleSums  ql (p:ps) qs = (makeAdmissibleSums' ql p qs) ++ (makeAdmissibleSums ql ps qs)
-makeAdmissibleSums' ql p qs = map (p <+>) $ filter (boxOrthogonal ql p) qs
+boxAtomicQuestions qla qlb = z:boxQuestions' ortho boxAtoms
+    where
+        boxAtoms = [a <> b | a <- atomsOf qla, b <- atomsOf qlb]
+        ortho = boxOrthogonal (qla, qlb)
+        z = zeroOf qla <> zeroOf qlb
+
+boxQuestions' :: (Ord a, Ord b) => (FreeProduct a b -> FreeProduct a b -> Bool) -> 
+    [FreeProduct a b] -> [FreeProduct a b]
+boxQuestions' _ [] = []
+boxQuestions' ortho (p:ps) = allBoxSums ortho orthoPairs p ++ boxQuestions' ortho ps
+    where
+        orthoPairs = filter (ortho p) ps
+
+allBoxSums :: (Ord a, Ord b) => (FreeProduct a b -> FreeProduct a b -> Bool) -> 
+    [FreeProduct a b] -> FreeProduct a b -> [FreeProduct a b]
+allBoxSums _ [] a = [a]
+allBoxSums ortho (p:ps) a = (allBoxSums ortho ps a) ++ (allBoxSums ortho orthoPairs $ p <+> a)
+    where
+        orthoPairs = filter (ortho p) ps
 
 -- | Orthogonality relation in construction of box product
 boxOrthogonal :: (Ord a, Ord b) => (QLogic a, QLogic b) -> FreeProduct a b -> FreeProduct a b -> Bool
@@ -191,7 +198,7 @@ boxProduct' qla qlb questions = boxLogic
         (Poset boxElems boxLess) = quotientLogic (PrePoset questions preorder) 
         preorder = preOrder questions $ boxPrec (qla, qlb)
 
-        boxOrtho a = fromJust $ find (goodOrtho a) boxElems 
+        boxOrtho a = fromJust $ find (goodOrtho a) boxElems
         goodOrtho a b = case boxPlus boxLogic a b of
                             Nothing -> False
                             Just c -> equalIn boxLogic c $ boxOne 
