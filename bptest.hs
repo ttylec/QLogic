@@ -1,6 +1,7 @@
 import Data.QLogic
 -- import Data.QLogic.BoxProductPOrd
 import Data.QLogic.BoxProduct
+import Data.QLogic.Examples
 -- import qualified Data.QLogic.BoxProductPOrd as POrd
 
 
@@ -30,8 +31,8 @@ main = do
         -- putStrLn $ show $ o1 (X1<>X1) (X0<>One)
         -- putStrLn $ show $ o2 (X1 POrd.<> X1) (X0 POrd.<> One)
         -- putStrLn $ show $ elements $ bwo
-        putStrLn $ show $ length $ elementsOf bwo
-        putStrLn $ show $ bwo
-        putStrLn $ show $ boxPlus bwo (zeroOf bwo) (oneOf bwo)
-        putStrLn $ show $ equivRepr $ zeroOf bwo
-        putStrLn $ show $ equivRepr $ oneOf bwo
+        putStrLn $ show $ elementsOf bwo
+        -- putStrLn $ show $ bwo
+        -- putStrLn $ show $ boxPlus bwo (zeroOf bwo) (oneOf bwo)
+        -- putStrLn $ show $ equivRepr $ zeroOf bwo
+        -- putStrLn $ show $ equivRepr $ oneOf bwo

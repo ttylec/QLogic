@@ -264,9 +264,3 @@ quotientBy' _ accum [] = accum
 quotientBy' eq accum as@(a:_) = quotientBy' eq ((Equiv equal):accum) rest
     where
         (equal, rest) = partition (eq a) as
-
-
--- Examples
---
-bwoAtomic = boxAtomicProduct lanternLogic lanternLogic
-bwo = boxProduct lanternLogic lanternLogic
