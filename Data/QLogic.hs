@@ -228,6 +228,11 @@ relationFromFunction n rel = computeUnboxedS (fromFunction (Z:.n:.n) isLess)
     where
         isLess (Z:.i:.j) = rel i j
 
+relationFromFunctionP :: Int -> (Int -> Int -> Bool) -> Relation
+relationFromFunctionP n rel = runIdentity $ computeUnboxedP (fromFunction (Z:.n:.n) isLess)
+    where
+        isLess (Z:.i:.j) = rel i j
+
 relLess :: Relation -> Int -> Int -> Bool
 relLess rel i j = rel ! (Z:.i:.j)
 
