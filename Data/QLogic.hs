@@ -12,6 +12,7 @@ import qualified Data.Array.Repa as Repa
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Map.Strict as Map
+import Control.Parallel.Strategies
 
 -- = TODO
 --  * extend documentation in second part
@@ -140,10 +141,27 @@ supIn ql a b
 unsafeSupIn :: QLogic a -> a -> a -> a
 unsafeSupIn ql a b = fromJust $ supIn ql a b
 
+-- | Lowest upper bound of pair of elements (join).
+infIn :: QLogic a -> a -> a -> Maybe a
+infIn ql a b  
+    | length glb == 1 = Just $ head glb
+    | otherwise = Nothing
+    where
+        glb = maximalIn ql $ filter (≤ a) $ filter (≤ b) $ elementsOf ql
+        (≤) = lessIn ql
+
+-- | Unsafe lowest upper bound: assumes that it exists.
+unsafeInfIn :: QLogic a -> a -> a -> a
+unsafeInfIn ql a b = fromJust $ infIn ql a b
+
 -- | Returns subset of minimal elements in given set,
 -- i.e. elements that are not greater than any of the
 -- other elements of the set.
 minimalIn :: QLogic a -> [a] -> [a]
+-- minimalIn ql as = filter (\a -> all (`notStrictlyLess` a) as) as
+--     where
+--         notStrictlyLess a b = (not $ lessIn ql a b) || (lessIn ql b a)
+-- 
 minimalIn _ [] = []
 minimalIn _ [a] = [a]
 minimalIn ql (a:as)
@@ -163,6 +181,100 @@ maximalIn ql (a:as)
     | otherwise = a:(maximalIn ql $ filter (not . (≤ a)) as)
     where
         (≤) = lessIn ql
+
+-- = Checking axioms of quantum logic
+
+checkLogic :: (Eq a) => QLogic a -> Bool
+checkLogic set = and [checkOrderReverse set, 
+                     checkOrthoIdempotence set, 
+                     checkSupremum set, 
+                     checkOrthomodular set]
+
+-- | Checks (L2) axiom of logic.
+checkOrderReverse :: QLogic a -> Bool
+checkOrderReverse ql = and cond
+    where
+        cond = map id [(ocmpl q) .<. (ocmpl p) | p <- elementsOf ql, q <- elementsOf ql, p .<. q] `using` parList rdeepseq
+        (.<.) = lessIn ql
+        ocmpl = ocmplIn ql
+
+-- |Check L3 axiom in given set of elements
+checkOrthoIdempotence :: (Eq a) => QLogic a -> Bool
+checkOrthoIdempotence ql = and cond 
+    where
+        cond = map idem (elementsOf ql) `using` parList rdeepseq 
+        idem p = p == (ocmpl . ocmpl $ p)
+        ocmpl = ocmplIn ql
+
+-- |Checks L4 axiom in given set of elements
+checkSupremum :: (Eq a) => QLogic a -> Bool
+checkSupremum ql = all (/= Nothing) orthosups
+    where
+        orthosups = map orthosup (elementsOf ql) `using` parList rseq
+        orthosup p = foldM sup p [q | q <- elementsOf ql, orthoIn ql p q]
+        sup = supIn ql
+
+-- |Checks L5 axiom in given set of elements
+checkOrthomodular :: (Eq a) => QLogic a -> Bool
+checkOrthomodular ql = and cond
+    where
+        cond = map id [Just b == rhs a b | a <- set, b <- set, a .<. b] `using` parList rdeepseq
+        rhs a b = (inf b $ ocmpl a) >>= (sup a)
+        (.<.) = lessIn ql
+        inf = infIn ql
+        sup = supIn ql
+        ocmpl = ocmplIn ql
+        set = elementsOf ql
+
+-- |Checks if two elements are compatible in given subset,
+-- i.e. a and b are compatible in K whenever there exists
+-- a_1, b_1 and c such that:
+--
+--      a = a1 \/ c     (1a)
+--      b = a2 \/ c     (1b)
+--
+--  and [a1, a2, c] is mutually orthogonal collection
+--  of elements.
+--
+--  Implementation is basically the proof of Proposition 1.3.5 of [1]:
+--
+--  Assume that a b are compatible. Then: 
+--
+--      a1 = a /\ ortho b, b1 = b /\ ortho a, c = a /\ b
+--
+--  (all exists by the assumption), and a1, b1, c are mutually
+--  orthogonal, and satisfy (1a) and (1b). If any of these steps fail
+--  we showed that a and b cannot be compatible (by contradiction).
+--
+--  Contrary, if above procedure resulted in True, we showed explicitly
+--  that a and b are compatible.
+compatibleIn :: (Eq a) => QLogic a -> a -> a -> Bool
+compatibleIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
+    where 
+          are_equal_a = liftM2 (==) aa $ Just a
+          are_equal_b = liftM2 (==) bb $ Just b
+          are_ortho = liftM (mutuallyOrthogonalIn ql) $ sequence [a1, b1, c] 
+          c = infIn ql a b
+          a1 = infIn ql a $ ocmplIn ql b
+          b1 = infIn ql b $ ocmplIn ql a
+          aa = join $ liftM2 (supIn ql) a1 c
+          bb = join $ liftM2 (supIn ql) b1 c
+
+-- |Checks if elemensts in given subset are mutually orthogonal in set
+mutuallyOrthogonalIn :: (Eq a) => QLogic a -> [a] -> Bool
+mutuallyOrthogonalIn ql = mutuallyBy (orthoIn ql)
+
+-- |Checks if elements in given subset are mutually orthogonal in set
+mutuallyCompatibleIn :: (Eq a) => QLogic a -> [a] -> Bool
+mutuallyCompatibleIn ql = mutuallyBy (compatibleIn ql)
+
+-- |Utitlity function to perform "mutuall" tests.
+mutuallyBy :: (a -> a -> Bool) -> [a] -> Bool
+mutuallyBy _ [] = True
+mutuallyBy f (a:as) = (all (f a) as) && mutuallyBy f as
+
+checkBoolean :: (Eq a) => QLogic a -> Bool
+checkBoolean ql = mutuallyCompatibleIn ql $ elementsOf ql
 
 -- = Auxialliary data structures
 
@@ -196,13 +308,23 @@ packedSupIn (PQLogic _ rel _) i j
     | length lub == 1 = Just $ head lub
     | otherwise = Nothing
     where
-        upper = whereIsTrue $ computeUnboxedS $ zipWith (&&) (rel `inRightRelationTo` i) (rel `inRightRelationTo` j)
-        lub = filter (isMinimalInRel rel upper) upper
-
-isMinimalInRel rel is i = not $ any (`less` i) is
-    where
+        ub = whereIsTrue $ computeUnboxedS $ zipWith (&&) (rel `inRightRelationTo` i) (rel `inRightRelationTo` j)
+        lub = filter (isMinimalInRel) ub
+        isMinimalInRel i = not $ any (`less` i) ub
         less i j | i == j = False
                  | otherwise = rel ! (Z:.i:.j)
+
+packedInfIn :: PQLogic -> Int -> Int -> Maybe Int
+packedInfIn (PQLogic _ rel _) i j
+    | length glb == 1 = Just $ head glb
+    | otherwise = Nothing
+    where
+        lb = whereIsTrue $ computeUnboxedS $ zipWith (&&) (rel `inLeftRelationTo` i) (rel `inLeftRelationTo` j)
+        glb = filter (isMaximalInRel) lb
+        isMaximalInRel i = not $ any (i `less`) ub
+        less i j | i == j = False
+                 | otherwise = rel ! (Z:.i:.j)
+
 
 --
 -- Auxilliary data structures

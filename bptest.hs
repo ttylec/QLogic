@@ -10,16 +10,20 @@ main :: IO ()
 main = do
         let qla = lanternLogic
             qlb = twoTwoBoxWorldLogic
-            questions = boxAtomicQuestions qla qlb
-            bwo = boxAtomicProduct qla qla
-            m = 1000
-            pairs = [(a, b) | a <- take m questions, b <- take m questions]
+            qlc =  boxAtomicQuestions qla qlb
+            n = length qlc
+            m = 300
+            questions = take m qlc
 
-            n = length questions
+            bwo = boxAtomicProduct qla qla
+            pairs = [(a, b) | a <- questions, b <- questions]
+
             packed = packList questions
-            packedRel = relationFromFunction m $ packRel packed $ boxPrec (qla, qlb)
-            closed = transitiveClosure packedRel
-        putStrLn $ show $ length questions
+            -- packedRel = transitiveClosure $ relationFromFunction m $ packRel packed $ boxPrec (qla, qlb)
+            preorder = preOrder questions $ boxPrec (qla, qlb)
+            (Poset boxElems boxLess) = quotientLogic (PrePoset questions preorder) 
+        putStrLn $ show $ n 
         -- putStrLn $ show $ packedRel
-        putStrLn $ show $ V.length $ V.filter id $ Repa.toUnboxed closed 
+        -- putStrLn $ show $ V.length $ V.filter id $ Repa.toUnboxed closed 
+        putStrLn $ show $ length boxElems
         -- putStrLn $ show $ V.length $ V.filter id $ Repa.toUnboxed packedRel 
