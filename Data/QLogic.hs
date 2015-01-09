@@ -13,6 +13,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Map.Strict as Map
 import Control.Parallel.Strategies
+import Debug.Trace
 
 -- = TODO
 --  * extend documentation in second part
@@ -44,9 +45,9 @@ infix 4 ≥
 --  (L2) a <= b implies ortho a >= ortho b
 --  (L3) ortho . ortho = id
 --  (L4) for any countable family [a_1 ..] of elements of L,
---       such that a_i <= ortho a_j for i /= j, supremum
+--       such that a_i ≤ ortho a_j for i /= j, supremum
 --       of [a_1 ..] is an element of L.
---  (L5) orthomodular law: a <= b implies b = a \/ (b /\ ortho a)
+--  (L5) orthomodular law: a ≤ b implies b = a \/ (b /\ ortho a)
 --       (we implicitly assume that the above exists)
 --
 -- The constructor of quantum logic does not check these
@@ -57,9 +58,10 @@ infix 4 ≥
 -- > QLogic elements partialOrderRelation orthocompletion min max
 data QLogic a where
        QLogic :: (Ord a) => [a] -> (a -> a -> Bool) -> (a -> a) -> a -> a -> QLogic a
+       PackedQLogic :: Int -> Relation -> OrthoMap -> Int -> Int -> QLogic Int
 
 instance (Show a) => Show (QLogic a) where
-        show ql = "elements:\n" ++ (show $ els) ++ "\n" ++
+        show ql@(QLogic _ _ _ _ _) = "elements:\n" ++ (show $ els) ++ "\n" ++
             "\ngreater than lists:\n" ++ (unlines $ gtlists) ++
             "\northocompletions:\n" ++ (unlines $ olists)
             where
@@ -85,14 +87,32 @@ fromList els order omap = qlogic
         min = head $ minimalIn qlogic els
         max = head $ maximalIn qlogic els
 
+-- | Convert QLogic to PackedQLogic.
+packQLogic :: QLogic a -> QLogic Int
+packQLogic (QLogic els rel ocmpl zero one) = 
+        PackedQLogic n prel pocmpl (toKey packed zero) (toKey packed one)
+        where
+            n = length els
+            packed = packList els
+            prel = relationFromFunction n $ packRel packed rel 
+            pocmpl = orthoMapFromFunction n $ pack packed ocmpl
+
+-- unpackQLogic :: [a] -> QLogic Int -> QLogic a
+-- unpackQLogic 
+-- 
+-- elementName :: QLogic Int -> Int -> a
+-- elementName (PackedQLogic packed _ _ _ _) = fromKey packed
+
 -- = Getting elements
 -- | List of elements in quantum logic
 elementsOf :: QLogic a -> [a]
 elementsOf (QLogic els _ _ _ _) = els
+elementsOf (PackedQLogic n _ _ _ _) = [0..n-1]
 
 -- | Order relation in quantum logic
 lessIn :: QLogic a -> (a -> a -> Bool)
 lessIn (QLogic _ rel _ _ _) = rel
+lessIn (PackedQLogic _ rel _ _ _) = \i j -> rel ! (Z:.i:.j)
 
 equalIn :: QLogic a -> (a -> a -> Bool)
 equalIn ql a b = lessIn ql a b && lessIn ql b a
@@ -100,14 +120,17 @@ equalIn ql a b = lessIn ql a b && lessIn ql b a
 -- | Orthocompletion in quantum logic
 ocmplIn :: QLogic a -> (a -> a)
 ocmplIn (QLogic _ _ omap _ _) = omap
+ocmplIn (PackedQLogic _ _ omap _ _) = \i -> omap ! (Z:.i)
 
 -- | The least element of quantum logic
 zeroOf :: QLogic a -> a
 zeroOf (QLogic _ _ _ z _) = z
+zeroOf (PackedQLogic _ _ _ z _) = z
 
 -- | The greatest element of quantum logic
 oneOf :: QLogic a -> a
 oneOf (QLogic _ _ _ _ o) = o
+oneOf (PackedQLogic _ _ _ _ o) = o
 
 -- = Quering quantum logic
 --
@@ -119,23 +142,54 @@ atomsOf ql = minimalIn ql $ filter (not . (equalIn ql z)) $ elementsOf ql
         z = zeroOf ql
 
 -- | List of elements in quantum logic that are greater than given element
+-- TODO this we could specialize for PackedQLogic, but we don't use it
+-- anywas in any performance critical part
 greaterThan :: QLogic a -> a -> [a]
 greaterThan ql a = filter (lessIn ql a) $ elementsOf ql
+
+greaterThan2 :: QLogic a -> a -> a -> [a]
+greaterThan2 (QLogic els (≤) _ _ _) a b = filter (a ≤) $ filter (b ≤) els 
+greaterThan2 (PackedQLogic els rel _ _ _) i j = whereIsTrue $ greater
+    where
+        greater = computeUnboxedS $ zipWith (&&) (rel `inRightRelationTo` i) (rel `inRightRelationTo` j)
+
+lubIn :: QLogic a -> a -> a -> [a] 
+lubIn ql a b = minimalIn ql $ filter (a ≤) $ filter (b ≤) els
+    where
+        els = elementsOf ql
+        (≤) = lessIn ql
+
+glbIn :: QLogic a -> a -> a -> [a] 
+glbIn ql a b = maximalIn ql $ filter (≤ a) $ filter (≤ b) els
+    where
+        els = elementsOf ql
+        (≤) = lessIn ql
+-- From benchmarks it seems that any kind of optimizing is not good...
+-- the generic minimalIn works great as is fastest.
+--
+-- lubIn ql@(QLogic els (≤) _ _ _) a b = minimalIn ql $ filter (a ≤) $ filter (b ≤) els 
+-- lubIn (PackedQLogic _ rel _ _ _) i j =  filter isMinimal $ whereIsTrue $ computeUnboxedS greater
+--     where
+--         greater = zipWith (&&) (rel `inRightRelationTo` i) (rel `inRightRelationTo` j)
+--         isMinimal k = foldAllS (&&) True $ zipWith (||) (neg greater) $ zipWith (||) (neg $ lessThan k) (eqTo k)
+--         lessThan k = rel `inLeftRelationTo` k
+--         eqTo k = computeUnboxedS $ fromFunction (Z:.n) (\ (Z:.i) -> i == k)
+--         neg = Repa.map not
+--         (Z:.n:._) = extent rel
 
 -- |Returns true if given two elements are orthogonal in set
 orthoIn :: QLogic a -> a -> a -> Bool
 orthoIn ql p q = lessIn ql p (ocmplIn ql q)
 
 -- = Partialy ordered set operations
-
+--
 -- | Lowest upper bound of pair of elements (join).
 supIn :: QLogic a -> a -> a -> Maybe a
 supIn ql a b  
     | length lub == 1 = Just $ head lub
     | otherwise = Nothing
     where
-        lub = minimalIn ql $ filter (b ≤) $ filter (a ≤) $ elementsOf ql
-        (≤) = lessIn ql
+        lub = lubIn ql a b
 
 -- | Unsafe lowest upper bound: assumes that it exists.
 unsafeSupIn :: QLogic a -> a -> a -> a
@@ -147,8 +201,7 @@ infIn ql a b
     | length glb == 1 = Just $ head glb
     | otherwise = Nothing
     where
-        glb = maximalIn ql $ filter (≤ a) $ filter (≤ b) $ elementsOf ql
-        (≤) = lessIn ql
+        glb = glbIn ql a b
 
 -- | Unsafe lowest upper bound: assumes that it exists.
 unsafeInfIn :: QLogic a -> a -> a -> a
@@ -158,10 +211,6 @@ unsafeInfIn ql a b = fromJust $ infIn ql a b
 -- i.e. elements that are not greater than any of the
 -- other elements of the set.
 minimalIn :: QLogic a -> [a] -> [a]
--- minimalIn ql as = filter (\a -> all (`notStrictlyLess` a) as) as
---     where
---         notStrictlyLess a b = (not $ lessIn ql a b) || (lessIn ql b a)
--- 
 minimalIn _ [] = []
 minimalIn _ [a] = [a]
 minimalIn ql (a:as)
@@ -289,16 +338,16 @@ data PQLogic = PQLogic Int Relation OrthoMap deriving (Show)
 -- Returns also 'Packed' data type that can be
 -- used to convert between elements of QLogic 
 -- and integers used by PQLogic.
-packQLogic :: (Ord a) => QLogic a -> (Packed a, PQLogic)
-packQLogic ql = (idx, PQLogic n pRel pOmap)
-    where
-        els = elementsOf ql
-        rel = lessIn ql
-        omap = ocmplIn ql
-        n = length els
-        idx = packList els
-        pRel = relationFromFunction n (packRel idx rel)
-        pOmap = orthoMapFromFunction n (pack idx omap)
+-- packQLogic :: (Ord a) => QLogic a -> (Packed a, PQLogic)
+-- packQLogic ql = (idx, PQLogic n pRel pOmap)
+--     where
+--         els = elementsOf ql
+--         rel = lessIn ql
+--         omap = ocmplIn ql
+--         n = length els
+--         idx = packList els
+--         pRel = relationFromFunction n (packRel idx rel)
+--         pOmap = orthoMapFromFunction n (pack idx omap)
 
 packedGreaterThan :: PQLogic -> Int -> [Int]
 packedGreaterThan (PQLogic _ rel _) i = whereIsTrue $ computeUnboxedS $ rel `inRightRelationTo` i
@@ -321,7 +370,7 @@ packedInfIn (PQLogic _ rel _) i j
     where
         lb = whereIsTrue $ computeUnboxedS $ zipWith (&&) (rel `inLeftRelationTo` i) (rel `inLeftRelationTo` j)
         glb = filter (isMaximalInRel) lb
-        isMaximalInRel i = not $ any (i `less`) ub
+        isMaximalInRel i = not $ any (i `less`) lb
         less i j | i == j = False
                  | otherwise = rel ! (Z:.i:.j)
 
