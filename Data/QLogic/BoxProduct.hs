@@ -41,12 +41,10 @@ instance (POrd a, POrd b) => POrd (FreeProduct a b) where
 (<>) a b = FreeProd a b
 infixl 5 <>
 
--- | Should be used to construct FreePlus.
--- FreePlus is commutative by definition,
--- and for the implementation it 
--- is assumed that the order of elements
--- (w.r.t to total lexical order)
--- int the sum is asceding.
+-- | Construct FreePlus.
+-- FreePlus is commutative by definition, and for the implementation it 
+-- is assumed that the order of elements (w.r.t to total lexical order)
+-- in the sum is asceding.
 (<+>) :: (Ord a, Ord b) => FreeProduct a b -> FreeProduct a b -> FreeProduct a b
 (<+>) a@(FreeProd _ _) b@(FreeProd _ _)
     | a <= b = FreePlus a b
@@ -84,8 +82,9 @@ boxQuestions qla qlb = zerozero:boxQuestions' ortho pairs
             pairs = [a <> b | a <- elementsOf qla, b <- elementsOf qlb, a /= zeroOf qla, b /= zeroOf qlb]
 
 -- | Returns the list of questions formed by atoms in box product of
--- two logics. TODO: it's not clear if this gives equivalent structure
--- as taing boxQuestions. 
+-- two logics. 
+-- TODO: it's not clear if this gives equivalent structure
+-- to the one obtained with boxQuestions. 
 boxAtomicQuestions :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b]
 boxAtomicQuestions qla qlb = z:boxQuestions' ortho boxAtoms
     where
@@ -209,12 +208,6 @@ boxPlus ql a b
     | a == zeroOf ql = Just b
     | b == zeroOf ql = Just a
     | otherwise = equivLookup (elementsOf ql) $ (equivRepr a) <+> (equivRepr b)
-
-data Poset a where
-        Poset :: (Ord a) => [a] -> (a -> a -> Bool) -> Poset a 
-
-data PrePoset a where
-        PrePoset :: (Ord a) => [a] -> (a -> a -> Bool) -> PrePoset a 
 
 -- | Given a set with a set with preorder return the poset,
 -- i.e. set of equivalence classes of preorder with order

@@ -62,5 +62,3 @@ lanternOrtho X0   = X1
 lanternOrtho X1   = X0
 lanternOrtho Y0   = Y1
 lanternOrtho Y1   = Y0
-
-(packedLanternDict, packedLantern) = packQLogic lanternLogic

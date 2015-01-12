@@ -30,6 +30,28 @@ class (Eq a, Ord a) => POrd a where
 infix 4 ≤
 infix 4 ≥
 
+-- |Partially ordered set structure.
+-- > Poset elements lessThanRelation
+data Poset a where
+        Poset :: (Ord a) => [a] -> (a -> a -> Bool) -> Poset a 
+        PackedPoset :: Int -> Relation -> Poset Int
+
+-- | Convert Poset to PackedPoset.
+packPoset :: Poset a -> Poset Int
+packPoset (Poset els rel) = 
+        PackedPoset n prel
+        where
+            n = length els
+            packed = packList els
+            prel = relationFromFunction n $ packRel packed rel 
+
+-- |Partially preordered set structure
+-- > PrePoset elements lessThanRelation
+data PrePoset a where
+        PrePoset :: (Ord a) => [a] -> (a -> a -> Bool) -> PrePoset a 
+        PackedPrePoset :: Int -> Relation -> PrePoset Int
+
+
 -- | Data type for quantum logics.
 --
 -- We assume that we work only with finite logics,
