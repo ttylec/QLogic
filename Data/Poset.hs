@@ -1,0 +1,168 @@
+{-# LANGUAGE GADTs, BangPatterns #-}
+
+module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
+                  , Poset(Poset), fromPOrd
+                  , packPoset, unpackPoset
+                  , lessIn, lubIn, glbIn 
+                  , infIn, unsafeInfIn
+                  , supIn, unsafeSupIn)
+                  where
+
+import Data.Maybe
+import Data.Relation
+import Data.Poset.Internals
+
+import Data.QLogic.Utils
+
+-- |Class for types with partial order
+class (Eq a, Ord a) => POrd a where
+        (.<=.) :: a -> a -> Bool
+        (.>=.) :: a -> a -> Bool
+        equivPOrd :: a -> a -> Bool
+
+        (.>=.) = flip (.<=.)
+        equivPOrd a b = a .<=. b && b .<=. a
+
+infix 4 .<=.
+infix 4 .>=.
+
+-- |Partially ordered set type. 
+-- It has three flavours:
+--
+-- > Poset elements lessThanRelation
+--
+-- for the most general case, where lessThanRelation
+-- is a function that defines partial order.
+--
+-- > SparsePoset elements sparseRelation
+--
+-- where relation is represented by SparseRelation.
+-- Elements are still quite arbitrary.
+-- Finally
+--
+-- > PackedPoset n relation
+--
+-- where elements are [0..n] and relation is 
+-- represented by Relation, i.e. DIM2 repa array.
+data Poset a where
+        Poset :: (Eq a) => [a] -> Relation a -> Poset a 
+
+instance (Show a) => Show (Poset a) where
+        show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
+                     "\nGreater than lists:\n" ++ (unlines $ gtlists)
+            where
+                gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
+
+-- = Construction
+-- |Constructs Poset from the list of POrd data
+fromPOrd :: (Eq a, POrd a) => [a] -> Poset a
+fromPOrd els = Poset els (Function (.<=.))
+
+-- |Convert Poset to packed representation: elements are replaced
+-- by sequence of integers and relation is coverted to array representation.
+packPoset :: (Ord a) => Poset a -> Poset Int
+packPoset (Poset els rel) = Poset [0..n-1] prel
+    where
+        n = length els
+        packed = packList els
+        prel = packRelation packed rel
+
+-- |Convert packed Poset representation to explicit one.
+-- It is not safe: packed must have appropriate length.
+unpackPoset :: (Ord a) => Packed a -> Poset Int -> Poset a
+unpackPoset packed (Poset els rel) = Poset (packedElements packed) (Function isLess)
+    where
+        isLess = unpackFunc2 packed (inRelation rel)
+
+-- |Preorder is a partial order relation that is anti-symmetric
+-- and transitive but not reflexive. Having a set with a preorder
+-- we can construct partialy ordered set by taking the quotient:
+quotientPoset :: (Ord a) => Poset a -> Poset (Equiv a)
+quotientPoset preposet = Poset els equivLess
+    where
+        els = quotientBy equiv $ elementsOf preposet
+        equiv = \a b -> a ≤ b && b ≤ a
+        (≤) = lessIn preposet
+        equivLess = Function $ liftFunc2 $ lessIn preposet
+
+isPoset :: Poset a -> Bool
+isPoset (Poset els rel) = isReflexive els rel && isAntiSymmetric els rel && isTransitive els rel
+
+-- = Basic queries
+-- |List of elements in Poset
+elementsOf :: Poset a -> [a]
+elementsOf (Poset els _) = els
+
+-- |Check if two elements are in relation
+lessIn :: Poset a -> a -> a -> Bool
+lessIn (Poset _ rel) = inRelation rel
+
+-- | Set of least upper bounds of two elements,
+-- i.e. minimal elements in the set of elements
+-- that are greater than both.
+lubIn :: Poset a -> a -> a -> [a] 
+lubIn poset a b = minimalIn poset $ filter (a ≤) $ filter (b ≤) els
+    where
+        els = elementsOf poset
+        (≤) = lessIn poset
+
+-- | Set of greatest lower bounds of two elements
+-- i.e. maximal elements in the set of elements
+-- that are less than both.
+glbIn :: Poset a -> a -> a -> [a] 
+glbIn poset a b = maximalIn poset $ filter (≤ a) $ filter (≤ b) els
+    where
+        els = elementsOf poset
+        (≤) = lessIn poset
+
+-- |Lowest upper bound of pair of elements (join).
+supIn :: Poset a -> a -> a -> Maybe a
+supIn poset a b  
+    | length lub == 1 = Just $ head lub
+    | otherwise = Nothing
+    where
+        lub = lubIn poset a b
+
+-- |Unsafe lowest upper bound: assumes that it exists.
+unsafeSupIn :: Poset a -> a -> a -> a
+unsafeSupIn poset a b = fromJust $ supIn poset a b
+
+-- |Lowest upper bound of pair of elements (join).
+infIn :: Poset a -> a -> a -> Maybe a
+infIn poset a b  
+    | length glb == 1 = Just $ head glb
+    | otherwise = Nothing
+    where
+        glb = glbIn poset a b
+
+-- |Unsafe lowest upper bound: assumes that it exists.
+unsafeInfIn :: Poset a -> a -> a -> a
+unsafeInfIn poset a b = fromJust $ infIn poset a b
+
+-- |List of elements that are greater or equal than given one
+geEqThan :: Poset a -> a -> [a]
+geEqThan poset a = filter (lessIn poset a) $ elementsOf poset
+
+-- |Returns subset of minimal elements in given set,
+-- i.e. elements that are not greater than any of the
+-- other elements of the set.
+minimalIn :: Poset a -> [a] -> [a]
+minimalIn _ [] = []
+minimalIn _ [a] = [a]
+minimalIn poset (a:as)
+    | any (≤ a) as = minimalIn poset as
+    | otherwise = a:(minimalIn poset $ filter (not . (a ≤)) as)
+    where
+        (≤) = lessIn poset
+
+-- |Returns subset of maximal elements in given set,
+-- i.e. element that are not less than any of the
+-- other lements of the set.
+maximalIn :: Poset a -> [a] -> [a]
+maximalIn _ [] = []
+maximalIn _ [a] = [a]
+maximalIn poset (a:as)
+    | any (a ≤) as = maximalIn poset as
+    | otherwise = a:(maximalIn poset $ filter (not . (≤ a)) as)
+    where
+        (≤) = lessIn poset
