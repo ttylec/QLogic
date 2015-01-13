@@ -1,11 +1,14 @@
 {-# LANGUAGE GADTs, BangPatterns #-}
 
-module Data.Poset.Internals (Equiv, liftFunc2, quotientBy
+module Data.Poset.Internals (Equiv, liftFunc, liftFunc2, quotientBy
                             , equivRepr, equivLookup
                             , Packed, packedElements, packList
+                            , toKey, fromKey
+                            , packFunc, unpackFunc
                             , packFunc2, unpackFunc2) 
                             where
 
+import Data.Maybe
 import Data.List
 import qualified Data.Map.Strict as Map
 import qualified Data.Vector as V
@@ -21,6 +24,9 @@ instance (Eq a) => Eq (Equiv a) where
 
 instance (Ord a) => Ord (Equiv a) where
         a `compare` b = equivRepr a `compare` equivRepr b
+
+liftFunc :: [Equiv a] -> (a -> a) -> Equiv a -> Equiv a
+liftFunc els f = fromJust . (equivLookup els) . f . equivRepr
 
 liftFunc2 :: (a -> a -> Bool) -> Equiv a -> Equiv a -> Bool
 liftFunc2 rel a b = equivRepr a `rel` equivRepr b
@@ -65,6 +71,14 @@ toKey (Packed dict _) a = case Map.lookup a dict of
 -- |Get element from key in Packed
 fromKey:: (Ord a) => Packed a -> Int -> a
 fromKey (Packed _ dict) i = dict V.! i
+
+-- |Lifts a function to Packed keys
+packFunc :: (Ord a) => Packed a -> (a -> a) -> Int -> Int
+packFunc idx f = (toKey idx) . f . (fromKey idx)
+
+-- |Lifts a binary function to Packed keys
+unpackFunc :: (Ord a) => Packed a -> (Int -> Int) -> a -> a
+unpackFunc idx f = (fromKey idx) . f . (toKey idx)
 
 -- |Lifts a binary function to Packed keys
 packFunc2 :: (Ord a) => Packed a -> (a -> a -> b) -> Int -> Int -> b

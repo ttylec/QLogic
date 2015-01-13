@@ -1,5 +1,5 @@
 
-module Data.Poset.Examples (Lantern(X0, X1, Y0, Y1)
+module Data.Poset.Examples (Lantern(..)
                            , lanternPoset
                            , booleanPoset)
                            where

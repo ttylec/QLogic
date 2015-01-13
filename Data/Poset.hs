@@ -1,11 +1,14 @@
-{-# LANGUAGE GADTs, BangPatterns #-}
+{-# LANGUAGE GADTs, BangPatterns, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 
 module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
-                  , Poset(Poset), fromPOrd
-                  , packPoset, unpackPoset
-                  , lessIn, lubIn, glbIn 
+                  , POrdStruct, lessIn, elementsOf
+                  , Poset(Poset), fromPOrd, quotientPoset
+                  , packPoset, packPoset', unpackPoset
+                  , equalIn
+                  , lubIn, glbIn 
                   , infIn, unsafeInfIn
-                  , supIn, unsafeSupIn)
+                  , supIn, unsafeSupIn
+                  , minimalIn, maximalIn)
                   where
 
 import Data.Maybe
@@ -13,6 +16,10 @@ import Data.Relation
 import Data.Poset.Internals
 
 import Data.QLogic.Utils
+
+class POrdStruct a b | a -> b where
+        elementsOf :: a -> [b]
+        lessIn :: a -> b -> b -> Bool
 
 -- |Class for types with partial order
 class (Eq a, Ord a) => POrd a where
@@ -53,6 +60,10 @@ instance (Show a) => Show (Poset a) where
             where
                 gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
 
+instance POrdStruct (Poset a) a where
+        elementsOf (Poset els _) = els
+        lessIn (Poset _ rel) = inRelation rel
+
 -- = Construction
 -- |Constructs Poset from the list of POrd data
 fromPOrd :: (Eq a, POrd a) => [a] -> Poset a
@@ -61,7 +72,10 @@ fromPOrd els = Poset els (Function (.<=.))
 -- |Convert Poset to packed representation: elements are replaced
 -- by sequence of integers and relation is coverted to array representation.
 packPoset :: (Ord a) => Poset a -> Poset Int
-packPoset (Poset els rel) = Poset [0..n-1] prel
+packPoset = snd . packPoset'
+
+packPoset' :: (Ord a) => Poset a -> (Packed a, Poset Int)
+packPoset' (Poset els rel) = (packed, Poset [0..n-1] prel)
     where
         n = length els
         packed = packList els
@@ -89,18 +103,14 @@ isPoset :: Poset a -> Bool
 isPoset (Poset els rel) = isReflexive els rel && isAntiSymmetric els rel && isTransitive els rel
 
 -- = Basic queries
--- |List of elements in Poset
-elementsOf :: Poset a -> [a]
-elementsOf (Poset els _) = els
-
--- |Check if two elements are in relation
-lessIn :: Poset a -> a -> a -> Bool
-lessIn (Poset _ rel) = inRelation rel
+-- |Check if two elements are equal in relation
+equalIn :: (POrdStruct p a) => p -> a -> a -> Bool
+equalIn poset a b = lessIn poset a b && lessIn poset b a
 
 -- | Set of least upper bounds of two elements,
 -- i.e. minimal elements in the set of elements
 -- that are greater than both.
-lubIn :: Poset a -> a -> a -> [a] 
+lubIn :: (POrdStruct p a) => p -> a -> a -> [a] 
 lubIn poset a b = minimalIn poset $ filter (a ≤) $ filter (b ≤) els
     where
         els = elementsOf poset
@@ -109,14 +119,14 @@ lubIn poset a b = minimalIn poset $ filter (a ≤) $ filter (b ≤) els
 -- | Set of greatest lower bounds of two elements
 -- i.e. maximal elements in the set of elements
 -- that are less than both.
-glbIn :: Poset a -> a -> a -> [a] 
+glbIn :: (POrdStruct p a) => p -> a -> a -> [a] 
 glbIn poset a b = maximalIn poset $ filter (≤ a) $ filter (≤ b) els
     where
         els = elementsOf poset
         (≤) = lessIn poset
 
 -- |Lowest upper bound of pair of elements (join).
-supIn :: Poset a -> a -> a -> Maybe a
+supIn :: (POrdStruct p a) => p -> a -> a -> Maybe a
 supIn poset a b  
     | length lub == 1 = Just $ head lub
     | otherwise = Nothing
@@ -124,11 +134,11 @@ supIn poset a b
         lub = lubIn poset a b
 
 -- |Unsafe lowest upper bound: assumes that it exists.
-unsafeSupIn :: Poset a -> a -> a -> a
+unsafeSupIn :: (POrdStruct p a) => p -> a -> a -> a
 unsafeSupIn poset a b = fromJust $ supIn poset a b
 
 -- |Lowest upper bound of pair of elements (join).
-infIn :: Poset a -> a -> a -> Maybe a
+infIn :: (POrdStruct p a) => p -> a -> a -> Maybe a
 infIn poset a b  
     | length glb == 1 = Just $ head glb
     | otherwise = Nothing
@@ -136,17 +146,17 @@ infIn poset a b
         glb = glbIn poset a b
 
 -- |Unsafe lowest upper bound: assumes that it exists.
-unsafeInfIn :: Poset a -> a -> a -> a
+unsafeInfIn :: (POrdStruct p a) => p -> a -> a -> a
 unsafeInfIn poset a b = fromJust $ infIn poset a b
 
 -- |List of elements that are greater or equal than given one
-geEqThan :: Poset a -> a -> [a]
+geEqThan :: (POrdStruct p a) => p -> a -> [a]
 geEqThan poset a = filter (lessIn poset a) $ elementsOf poset
 
 -- |Returns subset of minimal elements in given set,
 -- i.e. elements that are not greater than any of the
 -- other elements of the set.
-minimalIn :: Poset a -> [a] -> [a]
+minimalIn :: (POrdStruct p a) => p -> [a] -> [a]
 minimalIn _ [] = []
 minimalIn _ [a] = [a]
 minimalIn poset (a:as)
@@ -158,7 +168,7 @@ minimalIn poset (a:as)
 -- |Returns subset of maximal elements in given set,
 -- i.e. element that are not less than any of the
 -- other lements of the set.
-maximalIn :: Poset a -> [a] -> [a]
+maximalIn :: (POrdStruct p a) => p -> [a] -> [a]
 maximalIn _ [] = []
 maximalIn _ [a] = [a]
 maximalIn poset (a:as)
