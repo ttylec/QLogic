@@ -5,6 +5,10 @@ module Data.QLogic (QLogic, fromPoset, quotientQLogic, packQLogic, unpackQLogic
                    , supIn, unsafeSupIn
                    , ocmplIn, zeroOf, oneOf
                    , atomsOf
+                   , checkLogic, checkLattice, checkBoolean
+                   , checkOrderReverse, checkOrthoIdempotence
+                   , checkSupremum, checkOrthomodular, checkSups
+                   , checkDistributive
                    ) where
 
 import Data.Maybe
