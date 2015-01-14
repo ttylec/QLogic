@@ -2,8 +2,9 @@
 
 module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , POrdStruct, lessIn, elementsOf
-                  , Poset(Poset), fromPOrd, quotientPoset
-                  , packPoset, packPoset', unpackPoset
+                  , Poset(Poset), fromPOrd, fromASRelation, quotientPoset
+                  , isPoset
+                  , packPoset, packPoset', unpackPoset, sparsePoset
                   , equalIn
                   , lubIn, glbIn 
                   , infIn, unsafeInfIn
@@ -69,6 +70,10 @@ instance POrdStruct (Poset a) a where
 fromPOrd :: (Eq a, POrd a) => [a] -> Poset a
 fromPOrd els = Poset els (Function (.<=.))
 
+-- |Converts Poset relation to list representation
+sparsePoset :: (Ord a) => Poset a -> Poset a
+sparsePoset (Poset els rel) = Poset els $ sparseRelation els rel
+
 -- |Convert Poset to packed representation: elements are replaced
 -- by sequence of integers and relation is coverted to array representation.
 packPoset :: (Ord a) => Poset a -> Poset Int
@@ -87,6 +92,16 @@ unpackPoset :: (Ord a) => Packed a -> Poset Int -> Poset a
 unpackPoset packed (Poset els rel) = Poset (packedElements packed) (Function isLess)
     where
         isLess = unpackFunc2 packed (inRelation rel)
+
+-- |Takes a set with anti-symmetric, reflexive relation 
+-- and creates preposet by taking transitive closure of the relation.
+fromASRelation :: (Ord a) => Poset a -> Poset a
+-- fromASRelation set@(Poset els rel@(Function _)) = unpackPoset packed preposet
+--         where
+--             (packed, (Poset pels pr)) = packPoset' set
+--             preposet = Poset pels $ transitiveClosure pr
+fromASRelation (Poset els rel) = Poset els $ transitiveClosure els rel
+
 
 -- |Preorder is a partial order relation that is anti-symmetric
 -- and transitive but not reflexive. Having a set with a preorder

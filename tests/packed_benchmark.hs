@@ -11,8 +11,8 @@ packedCheck n = checkLogic $ packQLogic $ booleanLogic [0..n]
 
 main :: IO ()
 main = defaultMain [
-                   bgroup "booleanLogics" [ bench "explicit 5" $ whnf explicitCheck 5
-                                          , bench "explicit 7" $ whnf explicitCheck 7
-                                          , bench "packed 5" $ whnf packedCheck 5
-                                          , bench "packed 7" $ whnf packedCheck 7]
+                   bgroup "booleanLogics" [ bench "explicit 5" $ nf explicitCheck 5
+                                          , bench "explicit 7" $ nf explicitCheck 7
+                                          , bench "packed 5" $ nf packedCheck 5
+                                          , bench "packed 7" $ nf packedCheck 7]
                                           ]
