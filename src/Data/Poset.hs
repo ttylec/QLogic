@@ -2,14 +2,15 @@
 
 module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , POrdStruct, lessIn, elementsOf
-                  , Poset(Poset), fromPOrd, fromASRelation, quotientPoset
+                  , Poset(Poset), fromFunc, fromPOrd, fromASRelation, quotientPoset
                   , isPoset
                   , packPoset, packPoset', unpackPoset, sparsePoset
                   , equalIn
                   , lubIn, glbIn 
                   , infIn, unsafeInfIn
                   , supIn, unsafeSupIn
-                  , minimalIn, maximalIn)
+                  , minimalIn, maximalIn
+                  , propertyO2)
                   where
 
 import Data.Maybe
@@ -22,7 +23,7 @@ class POrdStruct a b | a -> b where
         elementsOf :: a -> [b]
         lessIn :: a -> b -> b -> Bool
 
--- |Class for types with partial order
+-- | Class for types with partial order
 class (Eq a, Ord a) => POrd a where
         (.<=.) :: a -> a -> Bool
         (.>=.) :: a -> a -> Bool
@@ -34,7 +35,7 @@ class (Eq a, Ord a) => POrd a where
 infix 4 .<=.
 infix 4 .>=.
 
--- |Partially ordered set type. 
+-- | Partially ordered set type. 
 -- It has three flavours:
 --
 -- > Poset elements lessThanRelation
@@ -65,7 +66,11 @@ instance POrdStruct (Poset a) a where
         elementsOf (Poset els _) = els
         lessIn (Poset _ rel) = inRelation rel
 
--- = Construction
+-- * Construction
+-- |Constructs Poset from list of elements and relation given by function
+fromFunc :: (Eq a) => [a] -> (a -> a -> Bool) -> Poset a
+fromFunc els f = Poset els (Function f)
+
 -- |Constructs Poset from the list of POrd data
 fromPOrd :: (Eq a, POrd a) => [a] -> Poset a
 fromPOrd els = Poset els (Function (.<=.))
@@ -96,10 +101,10 @@ unpackPoset packed (Poset els rel) = Poset (packedElements packed) (Function isL
 -- |Takes a set with anti-symmetric, reflexive relation 
 -- and creates preposet by taking transitive closure of the relation.
 fromASRelation :: (Ord a) => Poset a -> Poset a
--- fromASRelation set@(Poset els rel@(Function _)) = unpackPoset packed preposet
---         where
---             (packed, (Poset pels pr)) = packPoset' set
---             preposet = Poset pels $ transitiveClosure pr
+fromASRelation set@(Poset els rel@(Function _)) = unpackPoset packed preposet
+        where
+            (packed, (Poset pels pr)) = packPoset' set
+            preposet = Poset pels $ transitiveClosure pels pr
 fromASRelation (Poset els rel) = Poset els $ transitiveClosure els rel
 
 
@@ -117,7 +122,7 @@ quotientPoset preposet = Poset els equivLess
 isPoset :: Poset a -> Bool
 isPoset (Poset els rel) = isReflexive els rel && isAntiSymmetric els rel && isTransitive els rel
 
--- = Basic queries
+-- * Basic queries
 -- |Check if two elements are equal in relation
 equalIn :: (POrdStruct p a) => p -> a -> a -> Bool
 equalIn poset a b = lessIn poset a b && lessIn poset b a
@@ -191,3 +196,20 @@ maximalIn poset (a:as)
     | otherwise = a:(maximalIn poset $ filter (not . (≤ a)) as)
     where
         (≤) = lessIn poset
+
+
+-- * Testing various properties
+--
+propertyO2 :: (POrdStruct p a) => p -> (a -> a -> Maybe a) -> Bool
+propertyO2 poset op = and [a ≤ b `iff` any (\a' -> b `equal` (a `op` a')) els | a <- els, b <- els]
+    where
+        els = elementsOf poset
+        (≤) = lessIn poset
+        b `equal` ma = case ma of
+                           Nothing -> False
+                           Just a -> equalIn poset b a
+
+iff False False = True
+iff False True = False
+iff True False = False
+iff True True = True
