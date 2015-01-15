@@ -120,13 +120,10 @@ boxWorldLogicSolver constr obj = execLPM $ do
     mapM_ (\v -> setVarKind v ContVar) $ vars constr
 
 
-boxWorldConstraints :: [Observable] -> [Observable] -> BWConstraints Question Question
-boxWorldConstraints obsa obsb = BWConstraints { normConstr = normalization as bs
+boxWorldConstraints :: (Ord a, Ord b) => [[a]] -> [[b]] -> BWConstraints a b 
+boxWorldConstraints as bs = BWConstraints { normConstr = normalization as bs
                                               , nonsigConstr = nonsignalling as bs
                                               , vars = boxWorldLPVars (concat as) (concat bs) }
-      where
-          as = map questionsOf obsa
-          bs = map questionsOf obsb
 
 data BWConstraints a b = BWConstraints { normConstr :: [LinFunc (FreeProduct a b) Int]
                                        , nonsigConstr :: [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
