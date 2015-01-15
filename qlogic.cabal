@@ -30,7 +30,8 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Data.Poset, Data.Poset.Examples, Data.Relation, 
-                       Data.QLogic, Data.QLogic.Examples, Data.QLogic.BoxProduct
+                       Data.QLogic, Data.QLogic.Examples, Data.QLogic.BoxProduct,
+                       Data.QLogic.BoxWorld
   
   -- Modules included in this library but not exported.
   other-modules:       Data.Poset.Internals, Data.QLogic.Utils
@@ -42,7 +43,8 @@ library
   build-depends:       base >=4.7 && <4.8, mtl >=2.1 && <2.2, 
                        repa >=3.3 && <3.4, containers >=0.5 && <0.6, 
                        vector >=0.10 && <0.11, parallel >= 3.2,
-                       monad-par >=0.3
+                       monad-par >=0.3, glpk-hs >=0.3,
+                       transformers >=0.3
   
   -- Directories containing source files.
   hs-source-dirs:      src 

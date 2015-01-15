@@ -1,4 +1,4 @@
-module Data.QLogic.Utils (implies, subsets)
+module Data.QLogic.Utils (implies, subsets, isSubset)
     where
 
 -- = General utility functions
@@ -14,3 +14,6 @@ implies True True = True
 subsets :: [a] -> [[a]]
 subsets []  = [[]]
 subsets (x:xs) = subsets xs ++ map (x:) (subsets xs)
+        
+isSubset :: Eq a => [a] -> [a] -> Bool
+isSubset a b = all (`elem` b) a

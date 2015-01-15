@@ -4,7 +4,8 @@ module Data.QLogic.BoxProduct ((<>), (<+>)
                               , boxQuestions, boxAtomicQuestions
                               , boxProduct, boxAtomicProduct
                               , boxPlus
-                              , boxProduct', freePlus  -- TO BE REMOVED
+                              , boxProduct'  -- TO BE REMOVED
+                              , FreeProduct(FreeProd, FreePlus)
                               ) where
 
 import Data.List
