@@ -21,7 +21,8 @@ instance Eq Observable where
         (Observable na da) == (Observable nb db) = na == nb && da == db
 
 instance Ord Observable where
-        (Observable na da) `compare` (Observable nb db) = (na `compare` nb) `mappend` (da `compare` db)
+        -- (Observable na da) `compare` (Observable nb db) = (na `compare` nb) `mappend` (da `compare` db)
+        (Observable na da) `compare` (Observable nb db) = na `compare` nb
 
 instance Show Observable where
         show (Observable name domain) = name ++ ": " ++ (show domain) 
@@ -35,7 +36,7 @@ instance Eq Question where
             | otherwise = obsa == obsb && a == b
 
 instance Ord Question where
-        (Question oa a) `compare` (Question ob b) = (oa `compare` ob) `mappend` (a `compare` b)
+        (Question oa a) `compare` (Question ob b) = {-# SCC qcompare #-} (oa `compare` ob) `mappend` (a `compare` b)
 
 instance POrd Question where
         (Question oa a) .<=. (Question ob b) | oa /= ob = False
@@ -65,52 +66,63 @@ boxLogic os = fromPoset poset ortho
 
 ssimplexDefaults = SimplexOpts MsgOff 10000 True
 
-boxWorldLPVars :: (Ord a, Ord b) => [a] -> [b] -> [FreeProduct a b]
+boxWorldLPVars :: [Question] -> [Question] -> [FreeProduct Question Question]
 boxWorldLPVars as bs = [a <> b | a <- as, b <- bs]
 
-normalization :: (Ord a, Ord b) => [[a]] -> [[b]] -> [LinFunc (FreeProduct a b) Int]
+normalization :: [[Question]] -> [[Question]] -> [LinFunc (FreeProduct Question Question) Int]
 normalization as bs = map varSum [boxWorldLPVars a b | a <- as, b <- bs]
 
-nonsignalling :: (Ord a, Ord b) => [[a]] -> [[b]] -> 
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
+nonsignalling :: [[Question]] -> [[Question]] -> 
+    [(LinFunc (FreeProduct Question Question) Int, LinFunc (FreeProduct Question Question) Int)]
 nonsignalling as bs = lefts ++ rights
     where
         lefts = concat $ map (nsLeft bs) $ concat as
         rights = concat $ map (nsRight as) $ concat bs
 
-nsLeft :: (Ord a, Ord b) => [[b]] -> a ->
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
+nsLeft :: [[Question]] -> Question ->
+    [(LinFunc (FreeProduct Question Question) Int, LinFunc (FreeProduct Question Question) Int)]
 nsLeft bbs a = pairs [varSum [a <> b | b <- bs] | bs <- bbs]
 
-nsRight :: (Ord a, Ord b) => [[a]] -> b ->
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
+nsRight :: [[Question]] -> Question ->
+    [(LinFunc (FreeProduct Question Question) Int, LinFunc (FreeProduct Question Question) Int)]
 nsRight aas b = pairs [varSum [a <> b | a <- as] | as <- aas]
 
 -- | Objective function representing value on a state
-objValue :: (Ord a, Ord b) => FreeProduct a b -> LinFunc (FreeProduct a b) Int
+objValue :: FreeProduct Question Question -> LinFunc (FreeProduct Question Question) Int
 objValue a@(FreeProd _ _) = var a
 objValue (FreePlus a as) = (var a) ^+^ objValue as
 
 -- | Objective function used to compute order relation
-objLess :: (Ord a, Ord b) => FreeProduct a b -> FreeProduct a b -> LinFunc (FreeProduct a b) Int
+objLess :: FreeProduct Question Question -> FreeProduct Question Question -> 
+    LinFunc (FreeProduct Question Question) Int
 objLess a b = (objValue a) ^-^ (objValue b)
 
-isBWQuestion :: (Ord b, Ord a) => BWConstraints a b -> FreeProduct a b -> IO Bool
-isBWQuestion constr a = do
+isZero :: FreeProduct Question Question -> Bool
+isZero (FreeProd (Question _ []) _) = True
+isZero (FreeProd _ (Question _ [])) = True
+isZero _ = False
+
+isBWQuestion :: BWConstraints -> FreeProduct Question Question -> IO Bool
+isBWQuestion constr a 
+    | isZero a = return True
+    | otherwise = do
         (_, Just (maxp, _)) <- glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
         -- putStrLn $ show $ obj
         return (maxp <= 1.0)
         where
             obj = objValue a
 
-isBWLess :: (Ord a, Ord b) => BWConstraints a b -> FreeProduct a b -> FreeProduct a b -> IO Bool
-isBWLess constr a b =  do
+isBWLess :: BWConstraints -> FreeProduct Question Question -> FreeProduct Question Question -> IO Bool
+isBWLess constr a b 
+    | isZero a = return True
+    | isZero b = return False
+    | otherwise = do
         (_, Just (maxp, _)) <- {-# SCC solver #-} glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
         return (not $ maxp > 0.0)
         where
             obj = objLess a b
 
-boxWorldLogicSolver :: (Ord b, Ord a) => BWConstraints a b -> LinFunc (FreeProduct a b) Int -> LP (FreeProduct a b) Int
+boxWorldLogicSolver :: BWConstraints -> LinFunc (FreeProduct Question Question) Int -> LP (FreeProduct Question Question) Int
 boxWorldLogicSolver constr obj = execLPM $ do
     setDirection Max
     setObjective obj
@@ -120,7 +132,7 @@ boxWorldLogicSolver constr obj = execLPM $ do
     mapM_ (\v -> setVarKind v ContVar) $ vars constr
 
 
-boxWorldConstraints :: [Observable] -> [Observable] -> BWConstraints Question Question
+boxWorldConstraints :: [Observable] -> [Observable] -> BWConstraints
 boxWorldConstraints obsa obsb = BWConstraints { normConstr = normalization as bs
                                               , nonsigConstr = nonsignalling as bs
                                               , vars = boxWorldLPVars (concat as) (concat bs) }
@@ -128,9 +140,9 @@ boxWorldConstraints obsa obsb = BWConstraints { normConstr = normalization as bs
           as = map questionsOf obsa
           bs = map questionsOf obsb
 
-data BWConstraints a b = BWConstraints { normConstr :: [LinFunc (FreeProduct a b) Int]
-                                       , nonsigConstr :: [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-                                       , vars :: [FreeProduct a b] }
+data BWConstraints = BWConstraints { normConstr :: [LinFunc (FreeProduct Question Question) Int]
+                                   , nonsigConstr :: [(LinFunc (FreeProduct Question Question) Int, LinFunc (FreeProduct Question Question) Int)]
+                                   , vars :: [FreeProduct Question Question] }
 
 pairs :: [a] -> [(a, a)]
 pairs [] = []
