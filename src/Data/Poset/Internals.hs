@@ -32,7 +32,7 @@ liftFunc2 :: (a -> a -> Bool) -> Equiv a -> Equiv a -> Bool
 liftFunc2 rel a b = equivRepr a `rel` equivRepr b
 
 equivRepr :: Equiv a -> a
-equivRepr (Equiv e) = head . sort $ e
+equivRepr (Equiv e) = minimum  e
 
 equivLookup :: [Equiv a] -> a -> Maybe (Equiv a)
 equivLookup [] _ = Nothing
@@ -41,8 +41,9 @@ equivLookup (e@(Equiv ec):es) a
     | otherwise = equivLookup es a
 
 quotientBy :: (Ord a) => (a -> a -> Bool) -> [a] -> [Equiv a]
-quotientBy eq set = quotientBy' eq [] set
+quotientBy eq = quotientBy' eq []
 
+quotientBy' :: Ord a => (a -> a -> Bool) -> [Equiv a] -> [a] -> [Equiv a]
 quotientBy' _ accum [] = accum
 quotientBy' eq accum as@(a:_) = quotientBy' eq ((Equiv equal):accum) rest
     where

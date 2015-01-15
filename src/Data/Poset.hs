@@ -209,6 +209,7 @@ propertyO2 poset op = and [a ≤ b `iff` any (\a' -> b `equal` (a `op` a')) els 
                            Nothing -> False
                            Just a -> equalIn poset b a
 
+iff :: Bool -> Bool -> Bool
 iff False False = True
 iff False True = False
 iff True False = False

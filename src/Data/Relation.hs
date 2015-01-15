@@ -54,6 +54,7 @@ inRelation (Function f) = f
 inRelation (ListRel rel) = inListRelation rel
 inRelation (ArrayRel rel) = \i j -> rel ! (Z:.i:.j)
 
+inListRelation :: (Ord k, Eq a) => Map k [a] -> k -> a -> Bool
 inListRelation rel = \a b -> case Map.lookup a rel of
                                  Nothing -> False
                                  Just x -> b `elem` x 
