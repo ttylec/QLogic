@@ -54,6 +54,15 @@ sparseRelation els rel = ListRel $ Map.fromList inrels
         inRelList e = filter (inRelation rel e) els
 
 -- |Construct sparse relation from monadic function
+-- TODO: any idea how to make it parallel?
+-- The problem is that we use it in the case where
+--
+-- > f :: a -> a -> IO Bool
+--
+-- because f arrives from FFI interface (GLPK solver). 
+-- Using unsafePerformIO is not probably good idea
+-- because GLPK makes extensive use of pointers. 
+-- Ok, nevermind, GLPK is not thread-safe :(.
 relationFromFuncM :: (Ord a, Monad m) => [a] -> (a -> a -> m Bool) -> m (Relation a)
 relationFromFuncM els f = do
         inrel <- sequence $ map geListM els

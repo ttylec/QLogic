@@ -18,6 +18,6 @@ main = do
         glpTermOut
         poset <- fromFuncM qs $ isBWLess lps 
         putStrLn $ show $ poset
-        putStrLn $ show $ bp_poset
+        -- putStrLn $ show $ bp_poset
 
 
