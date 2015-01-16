@@ -3,6 +3,7 @@
 module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , POrdStruct, lessIn, elementsOf
                   , Poset(Poset), fromFunc, fromPOrd, fromASRelation, quotientPoset
+                  , fromFuncM
                   , isPoset
                   , packPoset, packPoset', unpackPoset, sparsePoset
                   , equalIn
@@ -13,6 +14,7 @@ module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , propertyO2)
                   where
 
+import Control.Monad
 import Data.Maybe
 import Data.Relation
 import Data.Poset.Internals
@@ -70,6 +72,9 @@ instance POrdStruct (Poset a) a where
 -- |Constructs Poset from list of elements and relation given by function
 fromFunc :: (Eq a) => [a] -> (a -> a -> Bool) -> Poset a
 fromFunc els f = Poset els (Function f)
+
+-- |Constructs Poset from monadic order function
+fromFuncM els f = liftM (Poset els) $ relationFromFuncM els f
 
 -- |Constructs Poset from the list of POrd data
 fromPOrd :: (Eq a, POrd a) => [a] -> Poset a

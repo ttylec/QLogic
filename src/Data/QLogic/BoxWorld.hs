@@ -104,11 +104,14 @@ isBWQuestion constr a = do
             obj = objValue a
 
 isBWLess :: (Ord a, Ord b) => BWConstraints a b -> FreeProduct a b -> FreeProduct a b -> IO Bool
-isBWLess constr a b =  do
-        (_, Just (maxp, _)) <- {-# SCC solver #-} glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
-        return (not $ maxp > 0.0)
-        where
-            obj = objLess a b
+isBWLess constr a b 
+        | a == zeroElem constr = return True
+        | b == zeroElem constr = return False
+        | otherwise = do
+            (_, Just (maxp, _)) <- {-# SCC solver #-} glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
+            return (not $ maxp > 0.0)
+            where
+                obj = objLess a b
 
 boxWorldLogicSolver :: (Ord b, Ord a) => BWConstraints a b -> LinFunc (FreeProduct a b) Int -> LP (FreeProduct a b) Int
 boxWorldLogicSolver constr obj = execLPM $ do
@@ -120,14 +123,16 @@ boxWorldLogicSolver constr obj = execLPM $ do
     mapM_ (\v -> setVarKind v ContVar) $ vars constr
 
 
-boxWorldConstraints :: (Ord a, Ord b) => [[a]] -> [[b]] -> BWConstraints a b 
-boxWorldConstraints as bs = BWConstraints { normConstr = normalization as bs
-                                              , nonsigConstr = nonsignalling as bs
-                                              , vars = boxWorldLPVars (concat as) (concat bs) }
+boxWorldConstraints :: (Ord a, Ord b) => FreeProduct a b -> [[a]] -> [[b]] -> BWConstraints a b 
+boxWorldConstraints z as bs = BWConstraints { normConstr = normalization as bs
+                                            , nonsigConstr = nonsignalling as bs
+                                            , vars = boxWorldLPVars (concat as) (concat bs)
+                                            , zeroElem = z }
 
 data BWConstraints a b = BWConstraints { normConstr :: [LinFunc (FreeProduct a b) Int]
                                        , nonsigConstr :: [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-                                       , vars :: [FreeProduct a b] }
+                                       , vars :: [FreeProduct a b]
+                                       , zeroElem :: FreeProduct a b }
 
 pairs :: [a] -> [(a, a)]
 pairs [] = []

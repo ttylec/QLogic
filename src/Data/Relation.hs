@@ -3,6 +3,7 @@
 module Data.Relation (Relation(Function, ListRel, ArrayRel)
                      , inRelation
                      , packRelation, sparseRelation
+                     , relationFromFuncM
                      , isAntiSymmetric, isSymmetric
                      , isTransitive, isReflexive
                      , transitiveClosure)
@@ -11,16 +12,20 @@ module Data.Relation (Relation(Function, ListRel, ArrayRel)
 import Debug.Trace
 
 import Data.List
+import Control.Monad (filterM)
 import Control.Monad.Identity (runIdentity)
 import Data.Array.Repa hiding ((++), map, traverse)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
--- This is needed by parallel version of transitiveClosure for
--- ListRel. But we need to add everything to NFData there, so 
--- maybe it's not worth work in the end...
+-- Parallel version of transitiveClosure for
+-- ListRel needs following imports:
 --
 -- import Control.Monad.Par
 -- import Data.Traversable hiding (mapM)
+--
+-- But we need to make everything an instance of NFData
+-- as well. Maybe it's not worth, because "packed" works
+-- well and is much faster than transitive closure on ListRel.
 
 import Data.Poset.Internals
 import Data.QLogic.Utils
@@ -47,6 +52,14 @@ sparseRelation els rel = ListRel $ Map.fromList inrels
     where
         inrels = zip els $ map inRelList els
         inRelList e = filter (inRelation rel e) els
+
+-- |Construct sparse relation from monadic function
+relationFromFuncM :: (Ord a, Monad m) => [a] -> (a -> a -> m Bool) -> m (Relation a)
+relationFromFuncM els f = do
+        inrel <- sequence $ map geListM els
+        return $ ListRel $ Map.fromList $ zip els inrel
+        where
+            geListM a = filterM (a `f`) els
 
 -- |Returns whether two elements are in relation.
 inRelation :: Relation a -> a -> a -> Bool
