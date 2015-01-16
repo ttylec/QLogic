@@ -3,6 +3,7 @@
 module Data.Poset.Internals (Equiv, liftFunc, liftFunc2, quotientBy
                             , equivRepr, equivLookup
                             , Packed, packedElements, packList
+                            , packedLength
                             , toKey, fromKey
                             , packFunc, unpackFunc
                             , packFunc2, unpackFunc2) 
@@ -52,6 +53,12 @@ quotientBy' eq accum as@(a:_) = quotientBy' eq ((Equiv equal):accum) rest
 -- |Dictonary for "packing" abstract structures,
 -- for optimized operations using repa arrays.
 data Packed a = Packed (Map.Map a Int) (V.Vector a)
+
+instance Show a => Show (Packed a) where
+        show (Packed _ a) = "Packed: " ++ (unwords $ V.toList $ V.imap (\i a -> (show i) ++ ": " ++ show a) a)
+
+packedLength :: Packed a -> Int
+packedLength (Packed _ a) = V.length a
 
 packedElements :: Packed a -> [a]
 packedElements (Packed _ a) = V.toList a
