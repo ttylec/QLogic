@@ -1,0 +1,65 @@
+A "typical" non-signalling:
+
+    prob x y a 0 + prob x y a 1 = prob x z a 0 + prob x z a 1
+
+now, let we have observables x, y, z such that on one box:
+
+    quest x 0 + quest x 1 = quest z 0
+    quest y 0 + quest y 1 = quest z 0
+    quest z 0 + quest z 1 = TrueQuestion
+
+We can think of it as a box with three (not independent) settings: x, y, z.
+Each of them can have two outcomes. But then
+
+    prob p x a 0 + prob p x a 1 = prob p y a 0 + prob p y a 1      (*)
+
+from non-signalling, so we have right identification. On the other hand
+    
+    (*) = prob p z a 0 + prob p z a 1
+
+and this looks interesting, esp. if we could justify:
+
+    prob p z a 0 = prob p x a 0 + prob p x a 1
+
+----------
+
+Once more time, with similar idea. We have two settings: x, y.
+First has three outcome, the second has two and moreover:
+    
+    quest x 0 + quest x 1 = quest y 0 + quest y 1      (*)
+
+Non-signalling in this case is:
+
+    prob p x a 0 + prob p x a 1 + prob p x a 2 = prob p y a 0 + prob p y a 1
+
+If we require that (*) means that:
+
+    prob p x a 0 + prob p x a 1 = prob p y a 0 + prob p y a 1
+
+then prob p x a 2 = 0.
+
+
+----------
+
+How we would like to "signal":
+
+find state, such that
+
+    prob rho x x 1 1 = 0,     (1a)
+    prob rho x x 0 1 = 1      (1b)
+    prob rho x y 1 1 = 1,     (2a)
+    prob rho x y 0 1 = 0      (2b)
+
+then (by normalization):
+
+    prob rho x x 0 0 = 0,     (1c)
+    prob rho x x 1 0 = 0,     (1d)
+    prob rho x y 0 0 = 0,     (2c)
+    prob rho x y 1 0 = 0.     (2d)
+
+This is impossile, due to non-signalling, because:
+
+    prob rho x x 1 1 + prob rho x x 1 0 = 0, but
+    prob rho x y 1 1 + prob rho x y 1 0 = 1
+
+We need (1a,b) (2a,b) but without consequences of normalization...

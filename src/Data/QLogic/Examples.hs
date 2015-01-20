@@ -1,5 +1,6 @@
 
 module Data.QLogic.Examples (Lantern(..)
+                           , module Data.Poset.Examples
                            , lanternLogic
                            , booleanLogic)
                            where

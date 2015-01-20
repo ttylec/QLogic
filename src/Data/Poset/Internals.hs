@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, BangPatterns #-}
 
-module Data.Poset.Internals (Equiv, liftFunc, liftFunc2, quotientBy
+module Data.Poset.Internals (Equiv(Equiv), liftFunc, liftFunc2, quotientBy
                             , equivRepr, equivLookup
                             , Packed, packedElements, packList
                             , packedLength

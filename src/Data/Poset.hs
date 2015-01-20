@@ -10,6 +10,7 @@ module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , lubIn, glbIn 
                   , infIn, unsafeInfIn
                   , supIn, unsafeSupIn
+                  , geEqThan
                   , minimalIn, maximalIn
                   , propertyO2)
                   where

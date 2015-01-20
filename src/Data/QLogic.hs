@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, BangPatterns, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 
-module Data.QLogic (QLogic, fromPoset, quotientQLogic, packQLogic, unpackQLogic
+module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpackQLogic
                    , module Data.Poset
                    , disjointIn
                    , ocmplIn, zeroOf, oneOf

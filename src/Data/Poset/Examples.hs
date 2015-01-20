@@ -7,6 +7,7 @@ module Data.Poset.Examples (Lantern(..)
 import Data.Poset
 import Data.Relation
 import Data.QLogic.Utils
+import Data.QLogic.IO
 
 -- = Examples
 -- |Chinesse lantern POrd data (simple orthomodular lattice):
@@ -16,6 +17,9 @@ import Data.QLogic.Utils
 -- >   \ | | /
 -- >    Zero
 data Lantern = Zero | X0 | X1 | Y0 | Y1 | One deriving (Bounded, Eq, Enum, Ord, Show)
+
+instance Repr Lantern where
+        repr = show
 
 instance POrd Lantern where
         Zero .<=. _ = True
