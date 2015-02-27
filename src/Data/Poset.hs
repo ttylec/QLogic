@@ -10,7 +10,7 @@ module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , lubIn, glbIn 
                   , infIn, unsafeInfIn
                   , supIn, unsafeSupIn
-                  , geEqThan
+                  , geEqThan, leEqThan
                   , minimalIn, maximalIn
                   , propertyO2)
                   where
@@ -22,9 +22,18 @@ import Data.Poset.Internals
 
 import Data.QLogic.Utils
 
+import Data.Set (Set, fromList, toList, isSubsetOf, difference, union)
+
 class POrdStruct a b | a -> b where
         elementsOf :: a -> [b]
-        lessIn :: a -> b -> b -> Bool
+        lessIn     :: a -> b -> b -> Bool
+        supIn      :: a -> b -> b -> Maybe b
+        supIn poset a b  
+            | length lub == 1 = Just $ head lub
+            | otherwise = Nothing
+            where
+                lub = lubIn poset a b
+
 
 -- | Class for types with partial order
 class (Eq a, Ord a) => POrd a where
@@ -58,6 +67,7 @@ infix 4 .>=.
 -- represented by Relation, i.e. DIM2 repa array.
 data Poset a where
         Poset :: (Eq a) => [a] -> Relation a -> Poset a 
+        -- ConcretePoset :: (Ord a) => [Set a] -> Poset (Set a)
 
 instance (Show a) => Show (Poset a) where
         show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
@@ -67,7 +77,11 @@ instance (Show a) => Show (Poset a) where
 
 instance POrdStruct (Poset a) a where
         elementsOf (Poset els _) = els
+        -- elementsOf (ConcretePoset els) = els
+        
         lessIn (Poset _ rel) = inRelation rel
+        -- lessIn (ConcretePoset _) = isSubsetOf
+        -- supIn (ConcretePoset _) a b = Just $ union a b
 
 -- * Construction
 -- |Constructs Poset from list of elements and relation given by function
@@ -151,13 +165,13 @@ glbIn poset a b = maximalIn poset $ filter (≤ a) $ filter (≤ b) els
         els = elementsOf poset
         (≤) = lessIn poset
 
--- |Lowest upper bound of pair of elements (join).
-supIn :: (POrdStruct p a) => p -> a -> a -> Maybe a
-supIn poset a b  
-    | length lub == 1 = Just $ head lub
-    | otherwise = Nothing
-    where
-        lub = lubIn poset a b
+-- -- |Lowest upper bound of pair of elements (join).
+-- supIn :: (POrdStruct p a) => p -> a -> a -> Maybe a
+-- supIn poset a b  
+--     | length lub == 1 = Just $ head lub
+--     | otherwise = Nothing
+--     where
+--         lub = lubIn poset a b
 
 -- |Unsafe lowest upper bound: assumes that it exists.
 unsafeSupIn :: (POrdStruct p a) => p -> a -> a -> a
@@ -178,6 +192,10 @@ unsafeInfIn poset a b = fromJust $ infIn poset a b
 -- |List of elements that are greater or equal than given one
 geEqThan :: (POrdStruct p a) => p -> a -> [a]
 geEqThan poset a = filter (lessIn poset a) $ elementsOf poset
+
+-- |List of elements that are greater or equal than given one
+leEqThan :: (POrdStruct p a) => p -> a -> [a]
+leEqThan poset a = filter (\b -> lessIn poset b a) $ elementsOf poset
 
 -- |Returns subset of minimal elements in given set,
 -- i.e. elements that are not greater than any of the
@@ -214,9 +232,3 @@ propertyO2 poset op = and [a ≤ b `iff` any (\a' -> b `equal` (a `op` a')) els 
         b `equal` ma = case ma of
                            Nothing -> False
                            Just a -> equalIn poset b a
-
-iff :: Bool -> Bool -> Bool
-iff False False = True
-iff False True = False
-iff True False = False
-iff True True = True

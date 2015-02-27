@@ -6,6 +6,7 @@ import Data.QLogic
 import Data.QLogic.BoxProduct
 import Data.QLogic.BoxProduct (FreeProduct(FreeProd, FreePlus))
 import Data.QLogic.Utils
+import Data.QLogic.IO
 
 import Data.Poset.Internals
 import Numeric.LinearProgramming
@@ -32,7 +33,7 @@ instance Ord Observable where
 instance Show Observable where
         show (Observable name domain) = name ++ ": " ++ (show domain) 
 
-data Question = Question Observable [Int] | NullQuestion
+data Question = Question Observable [Int] | NullQuestion | TrivialQuestion
 
 instance Eq Question where
         NullQuestion == NullQuestion = True
@@ -49,6 +50,8 @@ instance Ord Question where
         (Question oa a) `compare` (Question ob b) = (oa `compare` ob) `mappend` (a `compare` b)
 
 instance POrd Question where
+        NullQuestion .<=. _ = True
+        _ .<=. NullQuestion = False
         (Question oa a) .<=. (Question ob b) | oa /= ob = False
                                              | otherwise = a `isSubset` b
 
@@ -57,6 +60,13 @@ instance Show Question where
         show (Question (Observable name domain) a) 
             | a == domain = "One"
             | otherwise = name ++ (show a)
+
+instance Repr Question where
+        repr NullQuestion = "Zero"
+        repr (Question (Observable name _) []) = "Zero"
+        repr (Question (Observable name dom) vs) 
+            | vs == dom = "One"
+            | otherwise = name ++ (concat $ map show vs)
 
 questionOf :: Observable -> [Int] -> Question
 questionOf obs v = Question obs $ sort v

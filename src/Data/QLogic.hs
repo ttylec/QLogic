@@ -1,10 +1,12 @@
 {-# LANGUAGE GADTs, BangPatterns, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 
 module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpackQLogic
+                   , zeroOnePaste
                    , module Data.Poset
                    , disjointIn
                    , ocmplIn, zeroOf, oneOf
                    , atomsOf
+                   , mutuallyDisjointIn, mutuallyCompatibleIn
                    , checkLogic, checkLattice, checkBoolean
                    , checkOrderReverse, checkOrthoIdempotence
                    , checkSupremum, checkOrthomodular, checkSups
@@ -17,6 +19,11 @@ import Control.Parallel.Strategies
 
 import Data.Poset
 import Data.Poset.Internals
+
+class (POrdStruct a b) => QLogicStruct a b | a -> b where
+    lsupIn :: a -> b -> b -> Maybe b
+    lunsafeSupIn :: a -> b -> b -> b
+    lunsafeSupIn ql a b = fromJust $ lsupIn ql a b
 
 -- | Quantum logic 
 --
@@ -54,7 +61,20 @@ instance POrdStruct (QLogic a) a where
         elementsOf (QLogic poset _ _ _) = elementsOf poset
         lessIn (QLogic poset _ _ _) = lessIn poset
 
+instance QLogicStruct (QLogic a) a where
+    lsupIn ql a b | length lub == 1 = Just $ head lub
+                 | otherwise = Nothing
+                 where
+                     lub = lubIn ql a b
+
 -- = Construction
+-- -- |Construct from set of elements in QLgc class.
+-- fromQLgc :: (QLgc a) => [a] -> QLogic a
+-- fromQLgc els = QLogic (fromPOrd els) qlgcOcmpl min max
+--     where
+--         min = qlgcMin . head $ els
+--         max = qlgcMax . head $ els
+
 -- |Constructs Poset from the list of POrd data
 fromPoset :: (Eq a) => Poset a -> (a -> a) -> QLogic a
 fromPoset poset omap = QLogic poset omap min max
@@ -94,6 +114,42 @@ quotientQLogic (QLogic preposet omap min max) = QLogic poset equivOcmpl equivMin
         equivOcmpl = liftFunc els $ omap
         equivMax = fromJust $ equivLookup els max
         equivMin = fromJust $ equivLookup els min
+
+data ZOP a b = ZOPZero | LeftZOP a | RightZOP b | ZOPOne
+
+instance (Eq a, Eq b) => Eq (ZOP a b) where
+        ZOPZero == ZOPZero = True
+        ZOPOne == ZOPOne = True
+        (LeftZOP a) == (LeftZOP b) = a == b
+        (RightZOP a) == (RightZOP b) = a == b
+        _ == _ = False
+
+instance (Show a, Show b) => Show (ZOP a b) where
+        show ZOPZero = "Zero"
+        show ZOPOne = "One"
+        show (LeftZOP a) = "L" ++ show a
+        show (RightZOP a) = "R" ++ show a
+
+zopLess :: (Ord a, Ord b, POrdStruct qla a, POrdStruct qlb b) => (qla, qlb) -> ZOP a b -> ZOP a b -> Bool
+zopLess (qla, _) (LeftZOP a) (LeftZOP b) = lessIn qla a b
+zopLess (_, qlb) (RightZOP a) (RightZOP b) = lessIn qlb a b
+zopLess _ _ ZOPOne = True
+zopLess _ ZOPZero _ = True
+zopLess _ _ _ = False
+
+zopOcmpl :: (Ord a, Ord b) => (QLogic a, QLogic b) -> ZOP a b -> ZOP a b 
+zopOcmpl (qla, _) (LeftZOP a) = LeftZOP $ ocmplIn qla a
+zopOcmpl (_, qlb) (RightZOP b) = RightZOP $ ocmplIn qlb b
+zopOcmpl _ ZOPZero = ZOPOne
+zopOcmpl _ ZOPOne = ZOPZero
+
+zeroOnePaste :: (Ord a, Ord b) => QLogic a -> QLogic b -> QLogic (ZOP a b)
+zeroOnePaste qla qlb = QLogic poset (zopOcmpl (qla, qlb)) ZOPZero ZOPOne
+    where
+        lefts = [LeftZOP a | a <- elementsOf qla, a /= zeroOf qla, a /= oneOf qla] 
+        rights = [RightZOP b | b <- elementsOf qlb, b /= zeroOf qlb, b /= oneOf qlb]
+        els = ZOPZero:ZOPOne:(lefts ++ rights)
+        poset = fromFunc els (zopLess (qla, qlb))
 
 -- = Basic properties
 -- | Orthocompletion in quantum logic
@@ -149,11 +205,9 @@ checkOrthoIdempotence ql = and cond
 
 -- |Checks L4 axiom in given set of elements
 checkSupremum :: (Eq a) => QLogic a -> Bool
-checkSupremum ql = all (/= Nothing) orthosups
-    where
-        orthosups = map orthosup (elementsOf ql) `using` parList rseq
-        orthosup p = foldM sup p [q | q <- elementsOf ql, disjointIn ql p q]
-        sup = supIn ql
+checkSupremum ql = all (/= Nothing) [supIn ql p q | p <- elementsOf ql,
+                                                    q <- elementsOf ql,
+                                                    disjointIn ql p q]
 
 -- |Checks L5 axiom in given set of elements
 checkOrthomodular :: (Eq a) => QLogic a -> Bool

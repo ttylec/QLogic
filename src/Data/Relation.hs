@@ -124,5 +124,4 @@ transitiveClosure els (ListRel rel) = ListRel $ foldl' update rel els
                       where greater j m | j `elem` gelist = j:m
                                         | inListRelation rel a k && inListRelation rel k j = j:m
                                         | otherwise = m
-        
 transitiveClosure els (Function rel) = undefined

@@ -63,3 +63,28 @@ This is impossile, due to non-signalling, because:
     prob rho x y 1 1 + prob rho x y 1 0 = 1
 
 We need (1a,b) (2a,b) but without consequences of normalization...
+
+----------
+
+How relations between questions translate to probability tables.
+
+Let:
+
+    quest x 0 + quest x 1 = quest z 0
+    quest y 0 + quest y 1 = quest z 0
+    quest x 2 = quest y 2 = quest z 1
+
+then non-signalling reads:
+
+    prob rho p a x 0 + prob rho p a x 1 + prob rho a p x 2 = 
+    prob rho p a y 0 + prob rho p a y 1 + prob rho a p y 2 =
+    prob rho p a z 0 + prob rho p a z 1
+
+moreover,
+
+    sum (outcomes p) (\i -> prob rho p i x 0 + prob rho p i x 1) = 
+    sum (outcomes p) (\i -> prob rho p i y 0 + prob rho p i y 1)
+
+it seems that (1) and (2) satisfy that. 
+
+    prob rho x x 0 0 

@@ -2,19 +2,25 @@
 
 module Data.QLogic.BoxProduct ((<>), (<+>)
                               , boxQuestions, boxAtomicQuestions
-                              , boxProduct, boxAtomicProduct
+                              , boxPreProduct, boxPreAtomicProduct
+                              , boxProductPoset, boxAtomicProductPoset
                               , boxPlus
-                              , boxProduct'  -- TO BE REMOVED
+                              , boxPrec, freeDisj  -- TO BE REMOVED
                               , FreeProduct(FreeProd, FreePlus)
+                              , decomps, decompositions, makeEquivClass, basicProps -- TO BE REMOVED
+                              , bpViaEquiv
                               ) where
 
 import Data.List
 import Data.Maybe
 import Data.Monoid hiding ((<>))
 
+import Data.Graph
+
 import Data.Poset
 import Data.Poset.Internals
 import Data.QLogic
+import Data.QLogic.Utils
 
 -- = FreeProduct
 -- | Free product of quantum logics. 
@@ -158,14 +164,47 @@ boxPrec ql (FreePlus a as) p = (boxPrec ql a p) && (boxPrec ql as p)
 -- because a proposition is an equivalence class of questions.
 type BoxProduct a b = Equiv (FreeProduct a b)
 
-boxProduct :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (BoxProduct a b)
-boxProduct qla qlb = quotientPoset $ boxProduct' qla qlb $ boxQuestions qla qlb
+-- | Create box product poset in canonical way, using all questions
+boxProductPoset :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (BoxProduct a b)
+boxProductPoset qla qlb = quotientPoset $ boxPreProduct qla qlb
 
-boxAtomicProduct :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (BoxProduct a b)
-boxAtomicProduct qla qlb = quotientPoset $ boxProduct' qla qlb $ boxAtomicQuestions qla qlb
+-- | Create box product poset in canonical way, using only atomic questions
+boxAtomicProductPoset :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (BoxProduct a b)
+boxAtomicProductPoset qla qlb = quotientPoset $ boxPreAtomicProduct qla qlb
+
+boxPreProduct :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (FreeProduct a b)
+boxPreProduct qla qlb = boxProduct' qla qlb $ boxQuestions qla qlb
+
+boxPreAtomicProduct :: (Ord a, Ord b) => QLogic a -> QLogic b -> Poset (FreeProduct a b)
+boxPreAtomicProduct qla qlb = boxProduct' qla qlb $ boxAtomicQuestions qla qlb
 
 boxProduct' :: (Ord a, Ord b) => QLogic a -> QLogic b -> [FreeProduct a b] -> Poset (FreeProduct a b)
 boxProduct' qla qlb questions = fromASRelation $ fromFunc questions $ boxPrec (qla, qlb)
+
+basicProps :: (Ord a, Ord b) => QLogic a -> QLogic b -> [Equiv (FreeProduct a b)]
+basicProps qla qlb = map (\ (a, b) -> makeEquivClass (qla, qlb) a b) basicQs 
+  where
+      basicQs = [(p, q) | p <- elementsOf qla, q <- elementsOf qlb, p /= zeroOf qla, q /= zeroOf qlb]
+
+makeEquivClass (qla, qlb) p q = Equiv $ [prod a b | a <- decompositions qla p, b <- decompositions qlb q]
+    where
+        prod as bs = foldl1 (<+>) [a <> b | a <- as, b <- bs]
+
+decompositions qla p = decomps qla p $ filter (/= zeroOf qla) $ leEqThan qla p
+
+decomps qla p qs = filter (\x -> p == supOf x) $ filter (mutuallyDisjointIn qla) $ subsets qs
+    where
+        supOf [] = zeroOf qla
+        supOf (a:[]) = a
+        supOf (a:as) = foldl' (unsafeSupIn qla) a as
+           
+bpViaEquiv qla qlb = fromFunc props existsPrec
+    where
+        existsPrec (Equiv a) (Equiv b) = or [boxPrec (qla, qlb) p q | p <- a, q <- b]
+        props = {-# SCC props #-} map (Equiv . flattenSCC) $ stronglyConnComp rgraph
+        rgraph = map (\q -> (q, q, precQs q)) $ questions
+        precQs q = filter (boxPrec (qla, qlb) q) questions
+        questions = boxAtomicQuestions qla qlb
 
 -- These functions need separate proof of correctness. 
 -- It looks quite obvious, that we can define them in that way

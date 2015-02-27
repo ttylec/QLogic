@@ -14,6 +14,9 @@ import Data.List
 import qualified Data.Map.Strict as Map
 import qualified Data.Vector as V
 
+-- | Data type reprenting equivalence class as sets
+-- This should be probably a functor. Or maybe
+-- monad or separate class?
 data Equiv a where
        Equiv :: (Ord a) => [a] -> Equiv a
 
@@ -26,11 +29,18 @@ instance (Eq a) => Eq (Equiv a) where
 instance (Ord a) => Ord (Equiv a) where
         a `compare` b = equivRepr a `compare` equivRepr b
 
+-- | List function to equivalence class
 liftFunc :: [Equiv a] -> (a -> a) -> Equiv a -> Equiv a
 liftFunc els f = fromJust . (equivLookup els) . f . equivRepr
 
-liftFunc2 :: (a -> a -> Bool) -> Equiv a -> Equiv a -> Bool
-liftFunc2 rel a b = equivRepr a `rel` equivRepr b
+liftFunc2 :: (a -> a -> b) -> Equiv a -> Equiv a -> b
+liftFunc2 f a b = f (equivRepr a) (equivRepr b)
+
+-- | Lift relation to equivalence class in "transitive" way,
+-- i.e. equivalence classes are in relation iff there exists a 
+-- pair of representatives that are in relation. 
+liftRelT :: (a -> a -> Bool) -> Equiv a -> Equiv a -> Bool
+liftRelT rel (Equiv as) (Equiv bs) = or [a `rel` b | a <- as, b <- bs]
 
 equivRepr :: Equiv a -> a
 equivRepr (Equiv e) = minimum  e

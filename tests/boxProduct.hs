@@ -7,10 +7,11 @@ import Data.QLogic.BoxProduct
 
 main :: IO ()
 main = do
-        let qla = lanternLogic
-            qlb = lanternLogic
+        let qla = booleanLogic [0..2] -- lanternLogic
+            qlb = booleanLogic [0..2] -- lanternLogic
+            -- qlb = lanternLogic
             questions = boxQuestions qla qlb
-            pre = boxProduct' qla qlb questions
-            poset = boxAtomicProduct qla qlb
+            poset = boxAtomicProductPoset qla qlb
+            poset2 = bpViaEquiv qla qlb
 
-        putStrLn $ show $ poset
+        putStrLn $ show $ length $ elementsOf poset2
