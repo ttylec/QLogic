@@ -25,7 +25,7 @@ instance (Repr a, Repr b) => Repr (a, b) where
 instance Repr a => Repr [a] where
         repr a = "[" ++ (intercalate ", " $ map repr a) ++ "]"
 
-writeQLogic :: (Ord a, Repr a) => String -> QLogic a -> String
+writeQLogic :: (Ord a, Repr a, Repr p) => String -> QLogic p a -> String
 writeQLogic name (QLogic poset omap min max) = writePoset name poset ++ somap ++ decl ++ "\n"
     where
         nameOMap = name ++ "OCmpl"
@@ -33,7 +33,7 @@ writeQLogic name (QLogic poset omap min max) = writePoset name poset ++ somap ++
         somap = unlines $ map (\x -> nameOMap ++ " " ++ (repr x) ++ " = " ++ (repr $ omap x)) $ elementsOf poset 
         decl = name ++ "Qlogic = QLogic " ++ namePoset ++ " " ++ nameOMap ++ " " ++ (repr min) ++ " " ++ (repr max)
 
-writePoset:: (Ord a, Repr a) => String -> Poset a -> String
+writePoset:: (Ord a, Repr a, POrdStruct p a) => String -> p -> String
 writePoset name poset = header ++ datatype ++ pord_instance ++ "\n"
     where
         rels = map repr $ elementsOf poset

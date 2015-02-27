@@ -77,7 +77,7 @@ questionsOf obs@(Observable _ domain) = map (questionOf obs) $ subsets domain
 atomicQuestionsOf :: Observable -> [Question]
 atomicQuestionsOf obs@(Observable _ domain) = map (questionOf obs) $ map (:[]) domain
 
-boxLogic :: [Observable] -> QLogic Question
+boxLogic :: [Observable] -> QLogic (Poset Question) Question
 boxLogic os = fromPoset poset ortho
     where
         poset = fromPOrd els

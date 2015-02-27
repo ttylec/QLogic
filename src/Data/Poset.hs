@@ -3,6 +3,7 @@
 module Data.Poset (POrd, (.<=.), (.>=.), equivPOrd
                   , POrdStruct, lessIn, elementsOf
                   , Poset(Poset), fromFunc, fromPOrd, fromASRelation, quotientPoset
+                  , ConcretePoset(ConcretePoset)
                   , fromFuncM
                   , isPoset
                   , packPoset, packPoset', unpackPoset, sparsePoset
@@ -67,7 +68,9 @@ infix 4 .>=.
 -- represented by Relation, i.e. DIM2 repa array.
 data Poset a where
         Poset :: (Eq a) => [a] -> Relation a -> Poset a 
-        -- ConcretePoset :: (Ord a) => [Set a] -> Poset (Set a)
+        
+data ConcretePoset a where
+    ConcretePoset :: (Ord a) => [Set a] -> ConcretePoset a
 
 instance (Show a) => Show (Poset a) where
         show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
@@ -76,12 +79,19 @@ instance (Show a) => Show (Poset a) where
                 gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
 
 instance POrdStruct (Poset a) a where
-        elementsOf (Poset els _) = els
-        -- elementsOf (ConcretePoset els) = els
-        
-        lessIn (Poset _ rel) = inRelation rel
-        -- lessIn (ConcretePoset _) = isSubsetOf
-        -- supIn (ConcretePoset _) a b = Just $ union a b
+    elementsOf (Poset els _) = els
+    lessIn (Poset _ rel) = inRelation rel
+
+instance (Ord a, Show a) => Show (ConcretePoset a) where
+        show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
+                     "\nGreater than lists:\n" ++ (unlines $ gtlists)
+            where
+                gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
+
+instance (Ord a) => POrdStruct (ConcretePoset a) (Set a) where
+    elementsOf (ConcretePoset els) = els
+    lessIn _  = isSubsetOf
+    supIn _ a b = Just $ union a b
 
 -- * Construction
 -- |Constructs Poset from list of elements and relation given by function

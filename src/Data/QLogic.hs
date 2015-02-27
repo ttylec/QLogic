@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs, BangPatterns, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 
 module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpackQLogic
-                   , zeroOnePaste
+                   -- , zeroOnePaste
                    , module Data.Poset
                    , disjointIn
                    , ocmplIn, zeroOf, oneOf
@@ -45,10 +45,10 @@ class (POrdStruct a b) => QLogicStruct a b | a -> b where
 -- the above axioms are satisfied.
 --
 -- > QLogic poset ortho min max
-data QLogic a where
-        QLogic :: Poset a -> (a -> a) -> a -> a -> QLogic a
+data QLogic p a where
+        QLogic :: (POrdStruct p a) => p -> (a -> a) -> a -> a -> QLogic p a
 
-instance (Show a) => Show (QLogic a) where
+instance (Show p, Show a) => Show (QLogic p a) where
         show ql@(QLogic poset _ _ _) = show poset ++
             "\nOrthocompletions:\n" ++ (unlines $ olists) ++
             "\nmin: " ++ show (zeroOf ql) ++
@@ -57,15 +57,10 @@ instance (Show a) => Show (QLogic a) where
                 olists = map (\a -> (show a) ++ "C = " ++ (show $ omap a)) $ elementsOf ql
                 omap = ocmplIn ql
 
-instance POrdStruct (QLogic a) a where
+instance POrdStruct (QLogic p a) a where
         elementsOf (QLogic poset _ _ _) = elementsOf poset
         lessIn (QLogic poset _ _ _) = lessIn poset
-
-instance QLogicStruct (QLogic a) a where
-    lsupIn ql a b | length lub == 1 = Just $ head lub
-                 | otherwise = Nothing
-                 where
-                     lub = lubIn ql a b
+        supIn (QLogic poset _ _ _) = supIn poset
 
 -- = Construction
 -- -- |Construct from set of elements in QLgc class.
@@ -76,7 +71,7 @@ instance QLogicStruct (QLogic a) a where
 --         max = qlgcMax . head $ els
 
 -- |Constructs Poset from the list of POrd data
-fromPoset :: (Eq a) => Poset a -> (a -> a) -> QLogic a
+fromPoset :: (Eq a, POrdStruct p a) => p -> (a -> a) -> QLogic p a
 fromPoset poset omap = QLogic poset omap min max
     where
         els = elementsOf poset
@@ -85,7 +80,7 @@ fromPoset poset omap = QLogic poset omap min max
 
 -- |Convert Poset to packed representation: elements are replaced
 -- by sequence of integers and relation is coverted to array representation.
-packQLogic :: (Ord a) => QLogic a -> QLogic Int
+packQLogic :: (Ord a) => QLogic (Poset a) a -> QLogic (Poset Int) Int
 packQLogic (QLogic poset omap min max) = QLogic pposet pomap pmin pmax
     where
         (packed, pposet) = packPoset' poset
@@ -95,7 +90,7 @@ packQLogic (QLogic poset omap min max) = QLogic pposet pomap pmin pmax
 
 -- |Convert packed Poset representation to explicit one.
 -- It is not safe: packed must have appropriate length.
-unpackQLogic :: (Ord a) => Packed a -> QLogic Int -> QLogic a
+unpackQLogic :: (Ord a) => Packed a -> QLogic (Poset Int) Int -> QLogic (Poset a) a
 unpackQLogic packed (QLogic poset omap min max) = QLogic uposet uomap umin umax
     where
         uposet = unpackPoset packed poset
@@ -106,7 +101,7 @@ unpackQLogic packed (QLogic poset omap min max) = QLogic uposet uomap umin umax
 -- |Preorder is a partial order relation that is anti-symmetric
 -- and transitive but not reflexive. Having a set with a preorder
 -- we can construct partialy ordered set by taking the quotient:
-quotientQLogic :: (Ord a) => QLogic a -> QLogic (Equiv a)
+quotientQLogic :: (Ord a) => QLogic (Poset a) a -> QLogic (Poset (Equiv a)) (Equiv a)
 quotientQLogic (QLogic preposet omap min max) = QLogic poset equivOcmpl equivMin equivMax
     where
         poset = quotientPoset preposet
@@ -115,62 +110,62 @@ quotientQLogic (QLogic preposet omap min max) = QLogic poset equivOcmpl equivMin
         equivMax = fromJust $ equivLookup els max
         equivMin = fromJust $ equivLookup els min
 
-data ZOP a b = ZOPZero | LeftZOP a | RightZOP b | ZOPOne
-
-instance (Eq a, Eq b) => Eq (ZOP a b) where
-        ZOPZero == ZOPZero = True
-        ZOPOne == ZOPOne = True
-        (LeftZOP a) == (LeftZOP b) = a == b
-        (RightZOP a) == (RightZOP b) = a == b
-        _ == _ = False
-
-instance (Show a, Show b) => Show (ZOP a b) where
-        show ZOPZero = "Zero"
-        show ZOPOne = "One"
-        show (LeftZOP a) = "L" ++ show a
-        show (RightZOP a) = "R" ++ show a
-
-zopLess :: (Ord a, Ord b, POrdStruct qla a, POrdStruct qlb b) => (qla, qlb) -> ZOP a b -> ZOP a b -> Bool
-zopLess (qla, _) (LeftZOP a) (LeftZOP b) = lessIn qla a b
-zopLess (_, qlb) (RightZOP a) (RightZOP b) = lessIn qlb a b
-zopLess _ _ ZOPOne = True
-zopLess _ ZOPZero _ = True
-zopLess _ _ _ = False
-
-zopOcmpl :: (Ord a, Ord b) => (QLogic a, QLogic b) -> ZOP a b -> ZOP a b 
-zopOcmpl (qla, _) (LeftZOP a) = LeftZOP $ ocmplIn qla a
-zopOcmpl (_, qlb) (RightZOP b) = RightZOP $ ocmplIn qlb b
-zopOcmpl _ ZOPZero = ZOPOne
-zopOcmpl _ ZOPOne = ZOPZero
-
-zeroOnePaste :: (Ord a, Ord b) => QLogic a -> QLogic b -> QLogic (ZOP a b)
-zeroOnePaste qla qlb = QLogic poset (zopOcmpl (qla, qlb)) ZOPZero ZOPOne
-    where
-        lefts = [LeftZOP a | a <- elementsOf qla, a /= zeroOf qla, a /= oneOf qla] 
-        rights = [RightZOP b | b <- elementsOf qlb, b /= zeroOf qlb, b /= oneOf qlb]
-        els = ZOPZero:ZOPOne:(lefts ++ rights)
-        poset = fromFunc els (zopLess (qla, qlb))
+-- data ZOP a b = ZOPZero | LeftZOP a | RightZOP b | ZOPOne
+-- 
+-- instance (Eq a, Eq b) => Eq (ZOP a b) where
+--         ZOPZero == ZOPZero = True
+--         ZOPOne == ZOPOne = True
+--         (LeftZOP a) == (LeftZOP b) = a == b
+--         (RightZOP a) == (RightZOP b) = a == b
+--         _ == _ = False
+-- 
+-- instance (Show a, Show b) => Show (ZOP a b) where
+--         show ZOPZero = "Zero"
+--         show ZOPOne = "One"
+--         show (LeftZOP a) = "L" ++ show a
+--         show (RightZOP a) = "R" ++ show a
+-- 
+-- zopLess :: (Ord a, Ord b, POrdStruct qla a, POrdStruct qlb b) => (qla, qlb) -> ZOP a b -> ZOP a b -> Bool
+-- zopLess (qla, _) (LeftZOP a) (LeftZOP b) = lessIn qla a b
+-- zopLess (_, qlb) (RightZOP a) (RightZOP b) = lessIn qlb a b
+-- zopLess _ _ ZOPOne = True
+-- zopLess _ ZOPZero _ = True
+-- zopLess _ _ _ = False
+-- 
+-- zopOcmpl :: (Ord a, Ord b) => (QLogic a, QLogic b) -> ZOP a b -> ZOP a b 
+-- zopOcmpl (qla, _) (LeftZOP a) = LeftZOP $ ocmplIn qla a
+-- zopOcmpl (_, qlb) (RightZOP b) = RightZOP $ ocmplIn qlb b
+-- zopOcmpl _ ZOPZero = ZOPOne
+-- zopOcmpl _ ZOPOne = ZOPZero
+-- 
+-- zeroOnePaste :: (Ord a, Ord b) => QLogic a -> QLogic b -> QLogic (ZOP a b)
+-- zeroOnePaste qla qlb = QLogic poset (zopOcmpl (qla, qlb)) ZOPZero ZOPOne
+--     where
+--         lefts = [LeftZOP a | a <- elementsOf qla, a /= zeroOf qla, a /= oneOf qla] 
+--         rights = [RightZOP b | b <- elementsOf qlb, b /= zeroOf qlb, b /= oneOf qlb]
+--         els = ZOPZero:ZOPOne:(lefts ++ rights)
+--         poset = fromFunc els (zopLess (qla, qlb))
 
 -- = Basic properties
 -- | Orthocompletion in quantum logic
-ocmplIn :: QLogic a -> (a -> a)
+ocmplIn :: QLogic p a -> (a -> a)
 ocmplIn (QLogic _ omap _ _) = omap
 
 -- | The least element of quantum logic
-zeroOf :: QLogic a -> a
+zeroOf :: QLogic p a -> a
 zeroOf (QLogic  _ _ z _) = z
 
 -- | The greatest element of quantum logic
-oneOf :: QLogic a -> a
+oneOf :: QLogic p a -> a
 oneOf (QLogic  _ _ _ o) = o
 
 -- | Checks if elements are disjoint, i.e. if a ≤ ortho b
-disjointIn :: QLogic a -> a -> a -> Bool
+disjointIn :: QLogic p a -> a -> a -> Bool
 disjointIn ql a b = lessIn ql a $ ocmplIn ql b
 
 -- | List of atoms in logic,
 -- i.e. elements covering zero.
-atomsOf :: QLogic a -> [a]
+atomsOf :: QLogic p a -> [a]
 atomsOf ql = minimalIn ql $ filter (not . (`equal` zero)) $ elementsOf ql
     where
         equal = equalIn ql
@@ -179,14 +174,14 @@ atomsOf ql = minimalIn ql $ filter (not . (`equal` zero)) $ elementsOf ql
 -- = Axioms
 
 -- |Checks if given structure is a quantum logic
-checkLogic :: (Eq a) => QLogic a -> Bool
+checkLogic :: (Eq a) => QLogic p a -> Bool
 checkLogic set = and [checkOrderReverse set, 
                      checkOrthoIdempotence set, 
                      checkSupremum set, 
                      checkOrthomodular set]
 
 -- |Checks L2 axiom of logic.
-checkOrderReverse :: QLogic a -> Bool
+checkOrderReverse :: QLogic p a -> Bool
 checkOrderReverse ql = and cond
     where
         cond = map id [ocmpl q ≤ ocmpl p | p <- elementsOf ql, 
@@ -196,7 +191,7 @@ checkOrderReverse ql = and cond
         ocmpl = ocmplIn ql
         
 -- |Check L3 axiom in given set of elements
-checkOrthoIdempotence :: (Eq a) => QLogic a -> Bool
+checkOrthoIdempotence :: (Eq a) => QLogic p a -> Bool
 checkOrthoIdempotence ql = and cond 
     where
         cond = map idem (elementsOf ql) `using` parList rdeepseq 
@@ -204,13 +199,13 @@ checkOrthoIdempotence ql = and cond
         ocmpl = ocmplIn ql
 
 -- |Checks L4 axiom in given set of elements
-checkSupremum :: (Eq a) => QLogic a -> Bool
+checkSupremum :: (Eq a) => QLogic p a -> Bool
 checkSupremum ql = all (/= Nothing) [supIn ql p q | p <- elementsOf ql,
                                                     q <- elementsOf ql,
                                                     disjointIn ql p q]
 
 -- |Checks L5 axiom in given set of elements
-checkOrthomodular :: (Eq a) => QLogic a -> Bool
+checkOrthomodular :: (Eq a) => QLogic p a -> Bool
 checkOrthomodular ql = and cond
     where
         cond = map id [Just b == rhs a b | a <- set, b <- set, a .<. b] `using` parList rdeepseq
@@ -222,7 +217,7 @@ checkOrthomodular ql = and cond
         set = elementsOf ql
 
 -- |Checks if all sups and infs exist
-checkSups :: (Eq a) => QLogic a -> Bool
+checkSups :: (Eq a) => QLogic p a -> Bool
 checkSups ql = sups && infs
     where
         sups = all (/= Nothing) [supIn ql a b | a <- els, b <- els] -- `using` parList rdeepseq
@@ -230,13 +225,13 @@ checkSups ql = sups && infs
         els = elementsOf ql
 
 -- |Checks if the logic is orthomodular lattice
-checkLattice :: (Eq a) => QLogic a -> Bool
+checkLattice :: (Eq a) => QLogic p a -> Bool
 checkLattice ql = checkLogic ql && checkSups ql
 
 -- |Checks distributivity law
 -- Remark: it doesn't check if sups and infs exists but assumes
 -- existence. Do checkSups before for safe behaviour. 
-checkDistributive :: (Eq a) => QLogic a -> Bool
+checkDistributive :: (Eq a) => QLogic p a -> Bool
 checkDistributive ql = distrib
     where
         distrib = and [(a \/ b) /\ c == (a /\ c) \/ (b /\ c) | a <- els, b <- els, c <- els]
@@ -267,7 +262,7 @@ checkDistributive ql = distrib
 --
 --  Contrary, if above procedure resulted in True, we showed explicitly
 --  that a and b are compatible.
-compatibleIn :: (Eq a) => QLogic a -> a -> a -> Bool
+compatibleIn :: (Eq a) => QLogic p a -> a -> a -> Bool
 compatibleIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
     where 
           are_equal_a = liftM2 (==) aa $ Just a
@@ -280,15 +275,15 @@ compatibleIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b
           bb = join $ liftM2 (supIn ql) b1 c
 
 -- | Checks is given logic is a Boolean logic
-checkBoolean :: (Eq a) => QLogic a -> Bool
+checkBoolean :: (Eq a) => QLogic p a -> Bool
 checkBoolean ql = mutuallyCompatibleIn ql $ elementsOf ql
 
 -- |Checks if elemensts in given subset are mutually disjoint in set
-mutuallyDisjointIn :: (Eq a) => QLogic a -> [a] -> Bool
+mutuallyDisjointIn :: (Eq a) => QLogic p a -> [a] -> Bool
 mutuallyDisjointIn ql = mutuallyBy (disjointIn ql)
 
 -- |Checks if elements in given subset are mutually orthogonal in set
-mutuallyCompatibleIn :: (Eq a) => QLogic a -> [a] -> Bool
+mutuallyCompatibleIn :: (Eq a) => QLogic p a -> [a] -> Bool
 mutuallyCompatibleIn ql = mutuallyBy (compatibleIn ql)
 
 -- |Utitlity function to perform "mutuall" tests.

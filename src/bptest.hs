@@ -7,8 +7,8 @@ import Data.QLogic.BoxProduct
 
 main :: IO ()
 main = do
-        let qla = booleanLogic [0..2] -- lanternLogic
-            qlb = booleanLogic [0..2] -- lanternLogic
+        let qla = {-# SCC logics #-} booleanLogic [0..3] -- lanternLogic
+            qlb = {-# SCC logics #-} booleanLogic [0..2] -- lanternLogic
             -- qlb = lanternLogic
             questions = boxQuestions qla qlb
             poset = boxAtomicProductPoset qla qlb

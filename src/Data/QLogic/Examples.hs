@@ -2,6 +2,7 @@
 module Data.QLogic.Examples (Lantern(..)
                             , module Data.Poset.Examples
                             , lanternLogic
+                            , boolean3Logic
                             , booleanLogic
                             , concreteLogic)
                             where
@@ -15,7 +16,7 @@ import Data.Set (Set, fromList, isSubsetOf, difference)
 -- = Examples
 
 -- |Chinesse lantern logic
-lanternLogic:: QLogic Lantern
+lanternLogic :: QLogic (Poset Lantern) Lantern
 lanternLogic = fromPoset lanternPoset lanternOcmpl
     where
         lanternOcmpl Zero = One
@@ -25,20 +26,32 @@ lanternLogic = fromPoset lanternPoset lanternOcmpl
         lanternOcmpl Y1 = Y0
         lanternOcmpl One = Zero
 
+boolean3Logic :: QLogic (Poset Boolean3) Boolean3
+boolean3Logic = fromPoset boolean3Poset b3ortho
+    where
+        b3ortho Empty = S123
+        b3ortho S0    = S12
+        b3ortho S1    = S02
+        b3ortho S2    = S01
+        b3ortho S01   = S2
+        b3ortho S02   = S1
+        b3ortho S12   = S0
+        b3ortho S123  = Empty
+
 -- |Boolean logic (subsets of sample space)
-booleanLogic :: (Ord a) => [a] -> QLogic (Subset a)
+-- booleanLogic :: (Ord a) => [a] -> QLogic (ConcretePoset a) (Set a)
 booleanLogic space = fromPoset (booleanPoset space) booleanOcmpl
     where
-        booleanOcmpl (Subset space a) = Subset space $ difference space a
+        spaceSet = fromList space
+        booleanOcmpl = difference spaceSet
 
 
-concreteLogic :: (Ord a) => [a] -> [[a]] -> QLogic (Subset a)
-concreteLogic space els = fromPoset (fromFunc elems subsetOf) booleanOcmpl 
+concreteLogic :: (Ord a) => [a] -> [[a]] -> QLogic (ConcretePoset a) (Set a)
+concreteLogic space els = fromPoset (ConcretePoset elems) booleanOcmpl 
     where
-        elems = map (Subset spaceSet . fromList) $ subsets space
-        (Subset _ a) `subsetOf` (Subset _ b) = a `isSubsetOf` b
-        spaceSet = fromList space 
-        booleanOcmpl (Subset space a) = Subset space $ difference space a
+        elems = map fromList $ subsets space
+        spaceSet = fromList space
+        booleanOcmpl = difference spaceSet
 
 
 -- this is not a logic (sup law does not hold)
