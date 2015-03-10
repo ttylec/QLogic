@@ -41,6 +41,9 @@ instance Eq Question where
         (Question _ []) == NullQuestion = True
         NullQuestion == _ = False
         _ == NullQuestion = False
+        TrivialQuestion == TrivialQuestion = True
+        TrivialQuestion == _ = False
+        _ == TrivialQuestion = False
         (Question _ []) == (Question _ []) = True
         (Question obsa@(Observable _ adom) a) == (Question obsb@(Observable _ bdom) b) 
             | a == adom && b == bdom = True
@@ -51,11 +54,16 @@ instance Ord Question where
 
 instance POrd Question where
         NullQuestion .<=. _ = True
-        _ .<=. NullQuestion = False
-        (Question oa a) .<=. (Question ob b) | oa /= ob = False
-                                             | otherwise = a `isSubset` b
+        a .<=. NullQuestion = a == NullQuestion
+        _ .<=. TrivialQuestion = True
+        TrivialQuestion .<=. a = a == TrivialQuestion
+        q@(Question oa a) .<=. p@(Question ob b) 
+            | oa /= ob = False
+            | otherwise = a `isSubset` b
 
 instance Show Question where
+        show NullQuestion = "Zero"
+        show TrivialQuestion = "One"
         show (Question _ []) = "Zero"
         show (Question (Observable name domain) a) 
             | a == domain = "One"
@@ -72,7 +80,7 @@ questionOf :: Observable -> [Int] -> Question
 questionOf obs v = Question obs $ sort v
 
 questionsOf :: Observable -> [Question]
-questionsOf obs@(Observable _ domain) = map (questionOf obs) $ subsets domain
+questionsOf obs@(Observable _ domain) = map (questionOf obs) $ filter (/= domain) $ tail $ subsets domain
 
 atomicQuestionsOf :: Observable -> [Question]
 atomicQuestionsOf obs@(Observable _ domain) = map (questionOf obs) $ map (:[]) domain
@@ -81,7 +89,9 @@ boxLogic :: [Observable] -> QLogic (Poset Question) Question
 boxLogic os = fromPoset poset ortho
     where
         poset = fromPOrd els
-        els = nub $ concat $ map questionsOf os
+        els = NullQuestion:TrivialQuestion:(nub $ concat $ map questionsOf os)
+        ortho NullQuestion = TrivialQuestion
+        ortho TrivialQuestion = NullQuestion
         ortho (Question obs@(Observable _ domain) a) = questionOf obs $ filter (not . (`elem` a)) domain
 
 data BoxWorld = BoxWorld { leftBox :: [[Question]]

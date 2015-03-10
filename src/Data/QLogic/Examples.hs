@@ -4,14 +4,16 @@ module Data.QLogic.Examples (Lantern(..)
                             , lanternLogic
                             , boolean3Logic
                             , booleanLogic
-                            , concreteLogic)
+                            , concreteLogic
+                            , evenSubsets
+                            , threeBoxLogic)
                             where
 
 import Data.QLogic
 import Data.Poset.Examples
 import Data.QLogic.Utils
 
-import Data.Set (Set, fromList, isSubsetOf, difference)
+import Data.IntSet (IntSet, fromList, isSubsetOf, difference)
 
 -- = Examples
 
@@ -39,19 +41,61 @@ boolean3Logic = fromPoset boolean3Poset b3ortho
         b3ortho S123  = Empty
 
 -- |Boolean logic (subsets of sample space)
--- booleanLogic :: (Ord a) => [a] -> QLogic (ConcretePoset a) (Set a)
+booleanLogic :: [Int] -> QLogic ConcretePoset IntSet
 booleanLogic space = fromPoset (booleanPoset space) booleanOcmpl
     where
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
 
 
-concreteLogic :: (Ord a) => [a] -> [[a]] -> QLogic (ConcretePoset a) (Set a)
+concreteLogic :: [Int] -> [[Int]] -> QLogic ConcretePoset IntSet
 concreteLogic space els = fromPoset (ConcretePoset elems) booleanOcmpl 
     where
-        elems = map fromList $ subsets space
+        elems = map fromList els
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
+
+
+evenSubsets :: Int -> QLogic ConcretePoset IntSet
+evenSubsets n = concreteLogic space $ filter (even . length) $ subsets space
+    where
+        space = [0..n-1]
+
+data ThreeBox = TZero | A0 | A1 | B0 | B1 | C0 | C1 | A0C0 | A1C0 | B0C0 | B1C0 | TOne deriving (Bounded, Eq, Enum, Ord, Show)
+
+instance POrd ThreeBox where
+    TZero .<=. _ = True
+    _ .<=. TOne  = True
+    A0 .<=. C1   = True
+    A0 .<=. A0C0 = True
+    A1 .<=. C1   = True
+    A1 .<=. A1C0 = True
+    B0 .<=. C1   = True
+    B0 .<=. B0C0 = True
+    B1 .<=. C1   = True
+    B1 .<=. B1C0 = True
+    C0 .<=. A0C0 = True
+    C0 .<=. A1C0 = True
+    C0 .<=. B0C0 = True
+    C0 .<=. B1C0 = True
+    a .<=. b     = a == b
+
+threeBoxLogic :: QLogic (Poset ThreeBox) ThreeBox
+threeBoxLogic = fromPoset (fromPOrd els) ortho
+    where
+        els = [minBound..maxBound] :: [ThreeBox]
+        ortho TZero = TOne
+        ortho TOne  = TZero
+        ortho A0 = A1C0
+        ortho A1 = A0C0
+        ortho B0 = B1C0
+        ortho B1 = B0C0
+        ortho C0 = C1
+        ortho C1 = C0
+        ortho A0C0 = A1
+        ortho A1C0 = A0
+        ortho B0C0 = B1
+        ortho B1C0 = B0
 
 
 -- this is not a logic (sup law does not hold)

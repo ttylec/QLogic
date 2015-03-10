@@ -23,7 +23,8 @@ import Data.Poset.Internals
 
 import Data.QLogic.Utils
 
-import Data.Set (Set, fromList, toList, isSubsetOf, difference, union)
+import Data.IntSet ( IntSet, fromList, toList, isSubsetOf, difference, union
+                   , intersection, empty)
 
 class POrdStruct a b | a -> b where
         elementsOf :: a -> [b]
@@ -69,8 +70,8 @@ infix 4 .>=.
 data Poset a where
         Poset :: (Eq a) => [a] -> Relation a -> Poset a 
         
-data ConcretePoset a where
-    ConcretePoset :: (Ord a) => [Set a] -> ConcretePoset a
+data ConcretePoset where
+    ConcretePoset :: [IntSet] -> ConcretePoset
 
 instance (Show a) => Show (Poset a) where
         show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
@@ -82,16 +83,21 @@ instance POrdStruct (Poset a) a where
     elementsOf (Poset els _) = els
     lessIn (Poset _ rel) = inRelation rel
 
-instance (Ord a, Show a) => Show (ConcretePoset a) where
+instance Show ConcretePoset where
         show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
                      "\nGreater than lists:\n" ++ (unlines $ gtlists)
             where
                 gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
 
-instance (Ord a) => POrdStruct (ConcretePoset a) (Set a) where
+instance POrdStruct ConcretePoset IntSet where
     elementsOf (ConcretePoset els) = els
     lessIn _  = isSubsetOf
-    supIn _ a b = Just $ union a b
+    supIn poset a b 
+        | intersection a b == empty = Just $ union a b
+        | length lub == 1 = Just $ head lub
+        | otherwise = Nothing
+          where
+              lub = lubIn poset a b
 
 -- * Construction
 -- |Constructs Poset from list of elements and relation given by function

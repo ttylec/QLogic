@@ -12,9 +12,8 @@ import Data.Relation
 import Data.QLogic.Utils
 import Data.QLogic.IO
 
-import Data.Set (Set, fromList, isSubsetOf, difference, union)
+import Data.IntSet (IntSet, fromList, isSubsetOf, difference, union)
 
-import qualified Data.IntSet as S
 
 -- = Examples
 -- |Chinesse lantern POrd data (simple orthomodular lattice):
@@ -59,7 +58,7 @@ boolean3Poset = fromPOrd [minBound..maxBound]
 --     where
 --         elems = {-# SCC elems #-} map fromList $ subsets space
 
-booleanPoset :: (Ord a) => [a] -> ConcretePoset a
+booleanPoset :: [Int] -> ConcretePoset
 booleanPoset space = ConcretePoset elems
     where
         elems = {-# SCC elems #-} map fromList $ subsets space
