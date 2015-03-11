@@ -47,14 +47,12 @@ booleanLogic space = fromPoset (booleanPoset space) booleanOcmpl
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
 
-
 concreteLogic :: [Int] -> [[Int]] -> QLogic ConcretePoset IntSet
 concreteLogic space els = fromPoset (ConcretePoset elems) booleanOcmpl 
     where
         elems = map fromList els
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
-
 
 evenSubsets :: Int -> QLogic ConcretePoset IntSet
 evenSubsets n = concreteLogic space $ filter (even . length) $ subsets space

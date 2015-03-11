@@ -1,11 +1,11 @@
 {-# LANGUAGE GADTs, BangPatterns, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 
-module Data.QLogic.BoxProduct ((<>), (<+>)
+module Data.QLogic.BoxProduct ((<>), (<+>), BoxProduct
                               , boxQuestions, boxAtomicQuestions
                               , boxPreProduct, boxPreAtomicProduct
                               , boxProductPoset, boxAtomicProductPoset
-                              , boxPlus
-                              , boxPrec, freeDisj  -- TO BE REMOVED
+                              , boxPlus, boxDisjoint
+                              , boxPrec, freeDisj, freePlus  -- TO BE REMOVED
                               , FreeProduct(FreeProd, FreePlus)
                               , decomps, decompositions, makeEquivClass, basicProps -- TO BE REMOVED
                               , bpViaEquiv

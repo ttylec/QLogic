@@ -31,9 +31,9 @@ library
   -- Modules exported by the library.
   exposed-modules:     Data.Poset, Data.Poset.Examples, Data.Relation, 
                        Data.QLogic, Data.QLogic.Examples, Data.QLogic.BoxProduct,
-                       Data.QLogic.BoxWorld,
+                       Data.QLogic.BoxWorld, Data.QLogic.BoxWorldConcrete,
                        Data.QLogic.IO, Data.QLogic.Utils
-  
+ 
   -- Modules included in this library but not exported.
   other-modules:       Data.Poset.Internals
   

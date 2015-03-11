@@ -11,6 +11,7 @@ module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpac
                    , checkOrderReverse, checkOrthoIdempotence
                    , checkSupremum, checkOrthomodular, checkSups
                    , checkDistributive
+                   , compatibleIn
                    ) where
 
 import Data.Maybe
