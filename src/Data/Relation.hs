@@ -17,6 +17,7 @@ import Control.Monad.Identity (runIdentity)
 import Data.Array.Repa hiding ((++), map, traverse)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+
 -- Parallel version of transitiveClosure for
 -- ListRel needs following imports:
 --
@@ -27,16 +28,15 @@ import qualified Data.Map.Strict as Map
 -- as well. Maybe it's not worth, because "packed" works
 -- well and is much faster than transitive closure on ListRel.
 
-import Data.Poset.Internals
 import Data.QLogic.Utils
 
--- |Represent partial order relation.
+-- | Represent partial order relation.
 -- Relation can be given either as: a function,
 -- a list of elements that are in relation 
 -- for any given element, or by matrix with boolean entries.
 data Relation a where
-        Function :: (Eq a) => (a -> a -> Bool) -> Relation a
-        ListRel  :: (Eq a, Ord a) => Map a [a] -> Relation a
+        Function :: (a -> a -> Bool) -> Relation a
+        ListRel  :: Ord a => Map a [a] -> Relation a
         ArrayRel :: Array U DIM2 Bool -> Relation Int 
 
 -- |Convert different types of relation to array representation

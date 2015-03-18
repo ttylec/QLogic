@@ -19,12 +19,7 @@ import Control.Monad
 import Control.Parallel.Strategies
 
 import Data.Poset
-import Data.Poset.Internals
-
-class (POrdStruct a b) => QLogicStruct a b | a -> b where
-    lsupIn :: a -> b -> b -> Maybe b
-    lunsafeSupIn :: a -> b -> b -> b
-    lunsafeSupIn ql a b = fromJust $ lsupIn ql a b
+import Data.QLogic.Utils
 
 -- | Quantum logic 
 --
@@ -47,7 +42,7 @@ class (POrdStruct a b) => QLogicStruct a b | a -> b where
 --
 -- > QLogic poset ortho min max
 data QLogic p a where
-        QLogic :: (POrdStruct p a) => p -> (a -> a) -> a -> a -> QLogic p a
+        QLogic :: POrdStruct p a => p -> (a -> a) -> a -> a -> QLogic p a
 
 instance (Show p, Show a) => Show (QLogic p a) where
         show ql@(QLogic poset _ _ _) = show poset ++
@@ -200,10 +195,10 @@ checkOrthoIdempotence ql = and cond
         ocmpl = ocmplIn ql
 
 -- |Checks L4 axiom in given set of elements
-checkSupremum :: (Eq a) => QLogic p a -> Bool
-checkSupremum ql = all (/= Nothing) [supIn ql p q | p <- elementsOf ql,
-                                                    q <- elementsOf ql,
-                                                    disjointIn ql p q]
+checkSupremum :: QLogic p a -> Bool
+checkSupremum ql = all isJust [supIn ql p q | p <- elementsOf ql,
+                                              q <- elementsOf ql,
+                                              disjointIn ql p q]
 
 -- |Checks L5 axiom in given set of elements
 checkOrthomodular :: (Eq a) => QLogic p a -> Bool

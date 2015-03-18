@@ -17,8 +17,6 @@ import Data.Monoid hiding ((<>))
 
 import Data.Graph
 
-import Data.Poset
-import Data.Poset.Internals
 import Data.QLogic
 import Data.QLogic.Utils
 

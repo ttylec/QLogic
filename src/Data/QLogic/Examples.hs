@@ -11,6 +11,7 @@ module Data.QLogic.Examples (Lantern(..)
 
 import Data.QLogic
 import Data.Poset.Examples
+import Data.Poset.ConcretePoset
 import Data.QLogic.Utils
 
 import Data.IntSet (IntSet, fromList, isSubsetOf, difference)
@@ -41,20 +42,20 @@ boolean3Logic = fromPoset boolean3Poset b3ortho
         b3ortho S123  = Empty
 
 -- |Boolean logic (subsets of sample space)
-booleanLogic :: [Int] -> QLogic ConcretePoset IntSet
+booleanLogic :: [Int] -> QLogic ConcretePosetInt IntSet
 booleanLogic space = fromPoset (booleanPoset space) booleanOcmpl
     where
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
 
-concreteLogic :: [Int] -> [[Int]] -> QLogic ConcretePoset IntSet
-concreteLogic space els = fromPoset (ConcretePoset elems) booleanOcmpl 
+concreteLogic :: [Int] -> [[Int]] -> QLogic ConcretePosetInt IntSet
+concreteLogic space els = fromPoset (ConcretePosetInt elems) booleanOcmpl 
     where
         elems = map fromList els
         spaceSet = fromList space
         booleanOcmpl = difference spaceSet
 
-evenSubsets :: Int -> QLogic ConcretePoset IntSet
+evenSubsets :: Int -> QLogic ConcretePosetInt IntSet
 evenSubsets n = concreteLogic space $ filter (even . length) $ subsets space
     where
         space = [0..n-1]

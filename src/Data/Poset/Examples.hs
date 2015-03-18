@@ -8,6 +8,7 @@ module Data.Poset.Examples (Lantern(..)
                            where
 
 import Data.Poset
+import Data.Poset.ConcretePoset
 import Data.Relation
 import Data.QLogic.Utils
 import Data.QLogic.IO
@@ -58,8 +59,8 @@ boolean3Poset = fromPOrd [minBound..maxBound]
 --     where
 --         elems = {-# SCC elems #-} map fromList $ subsets space
 
-booleanPoset :: [Int] -> ConcretePoset
-booleanPoset space = ConcretePoset elems
+booleanPoset :: [Int] -> ConcretePosetInt
+booleanPoset space = ConcretePosetInt elems
     where
         elems = {-# SCC elems #-} map fromList $ subsets space
 

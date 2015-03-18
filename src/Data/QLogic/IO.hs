@@ -4,9 +4,10 @@ module Data.QLogic.IO (writePoset, writeQLogic, Repr, repr) where
 
 import Data.List
 import qualified Data.Map.Strict as Map
+
 import Data.QLogic
 import Data.Relation
-import Data.Poset.Internals
+import Data.QLogic.Utils
 import Data.QLogic.BoxProduct
 
 class Repr a where

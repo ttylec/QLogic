@@ -8,7 +8,6 @@ import Data.QLogic.BoxProduct (FreeProduct(FreeProd, FreePlus))
 import Data.QLogic.Utils
 import Data.QLogic.IO
 
-import Data.Poset.Internals
 import Numeric.LinearProgramming
 import qualified Data.Vector.Unboxed as V
 
