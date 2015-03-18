@@ -35,7 +35,7 @@ library
                        Data.QLogic.IO, Data.QLogic.Utils
  
   -- Modules included in this library but not exported.
-  other-modules:       Data.Poset.Internals
+  other-modules:       
   
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    GADTs, BangPatterns
