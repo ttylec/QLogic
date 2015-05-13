@@ -18,6 +18,9 @@ import Control.Applicative hiding (empty)
 import Data.Poset.ConcretePoset
 import Data.QLogic
 
+import Data.Attoparsec.ByteString.Char8
+import Data.ByteString.Char8 (pack, unpack)
+
 data Observable = Observable { name :: String
                              , domain :: [Int] } deriving (Eq, Ord, Show)
 
@@ -69,7 +72,36 @@ data TwoBoxQuestion = Composite AtomicQuestion AtomicQuestion | OPlus TwoBoxQues
 
 instance Show TwoBoxQuestion where
     show (Composite p q) = "[" ++ show p ++ show q ++ "]"
-    show (OPlus p q) = show p ++ "⊕" ++ show q
+    show (OPlus p q) = show p ++ "+" ++ show q
+
+readTwoBoxQuestion :: [Observable] -> String -> TwoBoxQuestion
+readTwoBoxQuestion obs r = case parseOnly (parseQ obs) $ pack r of
+    Right x -> x
+    Left s -> error $ "Error parsing string: " ++ s
+
+parseQ :: [Observable] -> Parser TwoBoxQuestion
+parseQ obs = do
+    (q:qs) <- parseQComposite obs `sepBy` (char '+')
+    return $ foldl' (<+>) q qs
+
+parseQComposite :: [Observable] -> Parser TwoBoxQuestion
+parseQComposite obs = do
+    char '['
+    a <- takeWhile1 (isAlpha_ascii)
+    alpha <- decimal
+    b <- takeWhile1 (isAlpha_ascii)
+    beta <- decimal
+    char ']'
+    return $ observableLookup obs (unpack $ a, alpha) <> observableLookup obs (unpack $ b, beta) 
+
+observableLookup :: [Observable] -> (String, Int) -> AtomicQuestion
+observableLookup obs (n, value) 
+    | value `elem` domain match = AtomicQuestion match value
+    | otherwise = error "Value out of domain."
+        where
+            match = case find ((n ==) . name) obs of
+                Just m -> m
+                Nothing -> error "No such observable."
 
 (<>) = Composite
 (<+>) = OPlus
@@ -109,13 +141,21 @@ boxWorldAtomicQs2 left right = [Composite qa qb | qa <- allQuestions left, qb <-
     where
         allQuestions obs = concat $ map atomicQuestionsOf obs
 
-concreteLogic :: (Ord a) => Set a -> [Set a] -> QLogic (ConcretePoset a) (Set a)
-concreteLogic space els = fromPoset (ConcretePoset els) booleanOcmpl 
+concreteLogic :: (Ord a) => Set a -> [Set a] -> CLogic a  --QLogic (ConcretePoset a) (Set a)
+concreteLogic space els = CLogic $ fromPoset (ConcretePoset els) booleanOcmpl 
     where
         booleanOcmpl = difference space
 
-boxWorldLogic2 :: [Observable] -> [Observable] -> (Set TwoSystems -> [TwoBoxQuestion], QLogic (ConcretePoset TwoSystems) (Set TwoSystems))
-boxWorldLogic2 left right = (fromRepr ql phase atoms, ql)
+-- boxWorldLogic2' :: [Observable] -> [Observable] -> (Set TwoSystems -> [TwoBoxQuestion], QLogic (ConcretePoset TwoSystems) (Set TwoSystems))
+-- boxWorldLogic2' left right = (fromRepr ql phase atoms, ql)
+--     where
+--         ql = concreteLogic space els
+--         els = nub $ generateConcreteElems $ map (boxQRepr2 phase) atoms
+--         atoms = boxWorldAtomicQs2 left right 
+--         phase@(PhaseSpace space) = phaseSpace2 left right
+
+boxWorldLogic2 :: [Observable] -> [Observable] -> (Set TwoSystems -> [TwoBoxQuestion], TwoBoxQuestion -> Set TwoSystems, CLogic TwoSystems)
+boxWorldLogic2 left right = (fromRepr ql phase atoms, boxQRepr2 phase, ql)
     where
         ql = concreteLogic space els
         els = nub $ generateConcreteElems $ map (boxQRepr2 phase) atoms
@@ -130,7 +170,7 @@ generateConcreteElems (a:as) = generateConcreteElems as ++
         disjoint = filter (null . intersection a) as
 
 type BWLElem = Set TwoSystems
-type BWLogic = QLogic (ConcretePoset TwoSystems) (Set TwoSystems)
+type BWLogic = CLogic TwoSystems  --QLogic (ConcretePoset TwoSystems) (Set TwoSystems)
 
 -- 
 -- data TwoBoxState p = TwoBoxState (Map Question2 p)

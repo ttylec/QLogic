@@ -3,7 +3,7 @@
 module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpackQLogic
                    -- , zeroOnePaste
                    , module Data.Poset
-                   , disjointIn
+                   -- , disjointIn
                    , ocmplIn, zeroOf, oneOf
                    , atomsOf
                    , atomicDecomposition
@@ -12,7 +12,9 @@ module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpac
                    , checkOrderReverse, checkOrthoIdempotence
                    , checkSupremum, checkOrthomodular, checkSups
                    , checkDistributive
-                   , compatibleIn
+                   -- , compatibleIn
+                   , CLogic(CLogic)
+                   , QLogicStruct, orthoIn, compatIn 
                    ) where
 
 import Data.List
@@ -21,8 +23,10 @@ import Control.Monad
 import Control.Parallel.Strategies
 
 import Data.Poset
+import Data.Poset.ConcretePoset
 import Data.QLogic.Utils
 
+import qualified Data.Set as Set
 -- | Quantum logic 
 --
 -- Quantum logic is defined as a set with partial order
@@ -44,7 +48,7 @@ import Data.QLogic.Utils
 --
 -- > QLogic poset ortho min max
 data QLogic p a where
-        QLogic :: POrdStruct p a => p -> (a -> a) -> a -> a -> QLogic p a
+        QLogic :: (Eq a, POrdStruct p a) => p -> (a -> a) -> a -> a -> QLogic p a
 
 instance (Show p, Show a) => Show (QLogic p a) where
         show ql@(QLogic poset _ _ _) = show poset ++
@@ -59,6 +63,43 @@ instance POrdStruct (QLogic p a) a where
         elementsOf (QLogic poset _ _ _) = elementsOf poset
         lessIn (QLogic poset _ _ _) = lessIn poset
         supIn (QLogic poset _ _ _) = supIn poset
+
+class (Eq a, POrdStruct p a) => QLogicStruct p a | p -> a where
+    ocmplIn  :: p -> a -> a
+    orthoIn  :: p -> a -> a -> Bool
+    orthoIn ql a b = lessIn ql a (ocmplIn ql b)
+    compatIn :: p -> a -> a -> Bool
+    compatIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
+        where 
+            are_equal_a = liftM2 (==) aa $ Just a
+            are_equal_b = liftM2 (==) bb $ Just b
+            are_ortho = liftM (mutuallyBy $ orthoIn ql) $ sequence [a1, b1, c] 
+            c = infIn ql a b
+            a1 = infIn ql a $ ocmplIn ql b
+            b1 = infIn ql b $ ocmplIn ql a
+            aa = join $ liftM2 (supIn ql) a1 c
+            bb = join $ liftM2 (supIn ql) b1 c
+    zeroOf   :: p -> a
+    oneOf    :: p -> a
+
+instance (Eq a, POrdStruct p a) => QLogicStruct (QLogic p a) a where
+    ocmplIn (QLogic _ ocmpl _ _) = ocmpl
+    zeroOf (QLogic  _ _ z _) = z
+    oneOf (QLogic  _ _ _ o) = o
+
+newtype CLogic a = CLogic (QLogic (ConcretePoset a) (Set.Set a))
+
+instance POrdStruct (CLogic a) (Set.Set a) where
+    elementsOf (CLogic ql) = elementsOf ql
+    lessIn (CLogic ql) = lessIn ql
+    supIn (CLogic ql) = supIn ql
+
+instance (Ord a) => QLogicStruct (CLogic a) (Set.Set a) where
+    ocmplIn (CLogic ql) = ocmplIn ql
+    orthoIn ql a b = Set.null $ Set.intersection a b
+    compatIn ql a b = Set.intersection a b `elem` elementsOf ql
+    zeroOf (CLogic ql) = zeroOf ql
+    oneOf (CLogic ql) = oneOf ql
 
 -- = Construction
 -- -- |Construct from set of elements in QLgc class.
@@ -145,25 +186,25 @@ quotientQLogic (QLogic preposet omap min max) = QLogic poset equivOcmpl equivMin
 --         poset = fromFunc els (zopLess (qla, qlb))
 
 -- = Basic properties
--- | Orthocompletion in quantum logic
-ocmplIn :: QLogic p a -> (a -> a)
-ocmplIn (QLogic _ omap _ _) = omap
+-- -- | Orthocompletion in quantum logic
+-- ocmplIn :: QLogic p a -> (a -> a)
+-- ocmplIn (QLogic _ omap _ _) = omap
 
--- | The least element of quantum logic
-zeroOf :: QLogic p a -> a
-zeroOf (QLogic  _ _ z _) = z
+-- -- | The least element of quantum logic
+-- zeroOf :: QLogic p a -> a
+-- zeroOf (QLogic  _ _ z _) = z
+-- 
+-- -- | The greatest element of quantum logic
+-- oneOf :: QLogic p a -> a
+-- oneOf (QLogic  _ _ _ o) = o
 
--- | The greatest element of quantum logic
-oneOf :: QLogic p a -> a
-oneOf (QLogic  _ _ _ o) = o
-
--- | Checks if elements are disjoint, i.e. if a ≤ ortho b
-disjointIn :: QLogic p a -> a -> a -> Bool
-disjointIn ql a b = lessIn ql a $ ocmplIn ql b
+-- -- | Checks if elements are disjoint, i.e. if a ≤ ortho b
+-- disjointIn :: QLogic p a -> a -> a -> Bool
+-- disjointIn ql a b = lessIn ql a $ ocmplIn ql b
 
 -- | List of atoms in logic,
 -- i.e. elements covering zero.
-atomsOf :: QLogic p a -> [a]
+atomsOf :: QLogicStruct p a => p -> [a]
 atomsOf ql = minimalIn ql $ filter (not . (`equal` zero)) $ elementsOf ql
     where
         equal = equalIn ql
@@ -172,14 +213,14 @@ atomsOf ql = minimalIn ql $ filter (not . (`equal` zero)) $ elementsOf ql
 -- = Axioms
 
 -- |Checks if given structure is a quantum logic
-checkLogic :: (Eq a) => QLogic p a -> Bool
+checkLogic :: QLogicStruct p a => p -> Bool
 checkLogic set = and [checkOrderReverse set, 
                      checkOrthoIdempotence set, 
                      checkSupremum set, 
                      checkOrthomodular set]
 
 -- |Checks L2 axiom of logic.
-checkOrderReverse :: QLogic p a -> Bool
+checkOrderReverse :: QLogicStruct p a => p -> Bool
 checkOrderReverse ql = and cond
     where
         cond = map id [ocmpl q ≤ ocmpl p | p <- elementsOf ql, 
@@ -189,7 +230,7 @@ checkOrderReverse ql = and cond
         ocmpl = ocmplIn ql
         
 -- |Check L3 axiom in given set of elements
-checkOrthoIdempotence :: (Eq a) => QLogic p a -> Bool
+checkOrthoIdempotence :: QLogicStruct p a => p -> Bool
 checkOrthoIdempotence ql = and cond 
     where
         cond = map idem (elementsOf ql) `using` parList rdeepseq 
@@ -197,13 +238,13 @@ checkOrthoIdempotence ql = and cond
         ocmpl = ocmplIn ql
 
 -- |Checks L4 axiom in given set of elements
-checkSupremum :: QLogic p a -> Bool
+checkSupremum :: QLogicStruct p a => p -> Bool
 checkSupremum ql = all isJust [supIn ql p q | p <- elementsOf ql,
                                               q <- elementsOf ql,
-                                              disjointIn ql p q]
+                                              orthoIn ql p q]
 
 -- |Checks L5 axiom in given set of elements
-checkOrthomodular :: (Eq a) => QLogic p a -> Bool
+checkOrthomodular :: QLogicStruct p a => p -> Bool
 checkOrthomodular ql = and cond
     where
         cond = map id [Just b == rhs a b | a <- set, b <- set, a .<. b] `using` parList rdeepseq
@@ -215,7 +256,7 @@ checkOrthomodular ql = and cond
         set = elementsOf ql
 
 -- |Checks if all sups and infs exist
-checkSups :: (Eq a) => QLogic p a -> Bool
+checkSups :: QLogicStruct p a => p -> Bool
 checkSups ql = sups && infs
     where
         sups = all (/= Nothing) [supIn ql a b | a <- els, b <- els] -- `using` parList rdeepseq
@@ -223,13 +264,13 @@ checkSups ql = sups && infs
         els = elementsOf ql
 
 -- |Checks if the logic is orthomodular lattice
-checkLattice :: (Eq a) => QLogic p a -> Bool
+checkLattice :: QLogicStruct p a => p -> Bool
 checkLattice ql = checkLogic ql && checkSups ql
 
 -- |Checks distributivity law
 -- Remark: it doesn't check if sups and infs exists but assumes
 -- existence. Do checkSups before for safe behaviour. 
-checkDistributive :: (Eq a) => QLogic p a -> Bool
+checkDistributive :: QLogicStruct p a => p -> Bool
 checkDistributive ql = distrib
     where
         distrib = and [(a \/ b) /\ c == (a /\ c) \/ (b /\ c) | a <- els, b <- els, c <- els]
@@ -260,37 +301,37 @@ checkDistributive ql = distrib
 --
 --  Contrary, if above procedure resulted in True, we showed explicitly
 --  that a and b are compatible.
-compatibleIn :: (Eq a) => QLogic p a -> a -> a -> Bool
-compatibleIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
-    where 
-          are_equal_a = liftM2 (==) aa $ Just a
-          are_equal_b = liftM2 (==) bb $ Just b
-          are_ortho = liftM (mutuallyDisjointIn ql) $ sequence [a1, b1, c] 
-          c = infIn ql a b
-          a1 = infIn ql a $ ocmplIn ql b
-          b1 = infIn ql b $ ocmplIn ql a
-          aa = join $ liftM2 (supIn ql) a1 c
-          bb = join $ liftM2 (supIn ql) b1 c
+-- compatibleIn :: (Eq a) => QLogic p a -> a -> a -> Bool
+-- compatibleIn ql a b = all (fromMaybe False) [are_ortho, are_equal_a, are_equal_b]
+--     where 
+--           are_equal_a = liftM2 (==) aa $ Just a
+--           are_equal_b = liftM2 (==) bb $ Just b
+--           are_ortho = liftM (mutuallyDisjointIn ql) $ sequence [a1, b1, c] 
+--           c = infIn ql a b
+--           a1 = infIn ql a $ ocmplIn ql b
+--           b1 = infIn ql b $ ocmplIn ql a
+--           aa = join $ liftM2 (supIn ql) a1 c
+--           bb = join $ liftM2 (supIn ql) b1 c
 
 -- | Checks is given logic is a Boolean logic
-checkBoolean :: (Eq a) => QLogic p a -> Bool
+checkBoolean :: QLogicStruct p a => p -> Bool
 checkBoolean ql = mutuallyCompatibleIn ql $ elementsOf ql
 
 -- |Checks if elemensts in given subset are mutually disjoint in set
-mutuallyDisjointIn :: (Eq a) => QLogic p a -> [a] -> Bool
-mutuallyDisjointIn ql = mutuallyBy (disjointIn ql)
+mutuallyDisjointIn :: QLogicStruct p a => p -> [a] -> Bool
+mutuallyDisjointIn ql = mutuallyBy (orthoIn ql)
 
 -- |Checks if elements in given subset are mutually orthogonal in set
-mutuallyCompatibleIn :: (Eq a) => QLogic p a -> [a] -> Bool
-mutuallyCompatibleIn ql = mutuallyBy (compatibleIn ql)
+mutuallyCompatibleIn :: QLogicStruct p a => p -> [a] -> Bool
+mutuallyCompatibleIn ql = mutuallyBy (compatIn ql)
 
 -- |Utitlity function to perform "mutuall" tests.
 mutuallyBy :: (a -> a -> Bool) -> [a] -> Bool
 mutuallyBy _ [] = True
 mutuallyBy f (a:as) = (all (f a) as) && mutuallyBy f as
 
-atomicDecomposition :: (Eq a) => QLogic p a -> a -> [[a]]
-atomicDecomposition ql a = filter (sumUpTo a) . subsetsBy (disjointIn ql) . atomsOf $ ql 
+atomicDecomposition :: (Eq a, QLogicStruct p a) => p -> a -> [[a]]
+atomicDecomposition ql a = filter (sumUpTo a) . subsetsBy (orthoIn ql) . atomsOf $ ql 
     where
         sumUpTo a [] = False
         sumUpTo a (b:bs) = foldl' (unsafeSupIn ql) b bs == a

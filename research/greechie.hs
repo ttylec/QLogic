@@ -11,7 +11,7 @@ import qualified Data.Set as Set
 x = Observable "X" [0, 1]
 y = Observable "Y" [0, 1]
 
-(repr, bwl) = boxWorldLogic2 [x, y] [x, y] 
+(repr, irepr, bwl) = boxWorldLogic2 [x, y] [x, y] 
 blocks = reverse . sortBy (comparing length) . filter (mutuallyCompatibleIn bwl) . subsets . atomsOf $ bwl
 
 prettyPrint = show . head . repr
