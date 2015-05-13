@@ -5,3 +5,7 @@ boxWorldGenerator
 .exrc
 logicChecks
 tags
+research/greechie
+src/concrete
+src/statetests
+BoxWorld-old.hs
