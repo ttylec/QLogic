@@ -22,6 +22,12 @@ instance (Ord a) => POrdStruct (ConcretePoset a) (Set a) where
           where
               lub = lubIn poset a b
 
+instance (Ord a, Show a) => Show (ConcretePoset a) where
+        show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++ 
+                     "\nGreater than lists:\n" ++ (unlines $ gtlists)
+            where
+                gtlists = map (\a -> (show a) ++ "| " ++ (show $ geEqThan poset a)) $ elementsOf poset
+
 data ConcretePosetInt = ConcretePosetInt [IntSet]
 
 instance POrdStruct ConcretePosetInt IntSet where

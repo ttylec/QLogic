@@ -50,20 +50,10 @@ subsets [] = [[]]
 subsets (x:xs) = subsets xs ++ map (x:) (subsets xs)
 
 -- | Subsets of a given list, such that elements of each subset
--- satisfy given binary and /transitive/ relation, e.g. if
---
--- > ortho :: Vector -> Vector -> Bool
---
--- is function that is True when given vectors are orthogonal,
--- then:
---
--- > subsetsBy ortho vectors
---
--- will produce subsets of of list of vectors, such that
--- each subset consists of mutually orthogonal vectors.
+-- satisfy given binary and /transitive/ relation.
 subsetsBy :: (a -> a -> Bool) -> [a] -> [[a]]
 subsetsBy _ [] = [[]]
-subsetsBy pred (x:xs) = subsetsBy pred xs ++ map (x:) (subsets $ filter (pred x) xs)
+subsetsBy pred (x:xs) = subsetsBy pred xs ++ map (x:) (subsetsBy pred $ filter (pred x) xs)
 
 -- | Data type reprenting equivalence class as sets
 data Equiv a where

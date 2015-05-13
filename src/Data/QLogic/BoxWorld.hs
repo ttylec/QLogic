@@ -1,279 +1,170 @@
+{-# LANGUAGE GADTs #-} 
 module Data.QLogic.BoxWorld where
 
-import Data.List
+import Prelude hiding (null)
+import Data.List hiding (union, null)
+import Data.Maybe
 
-import Data.QLogic
-import Data.QLogic.BoxProduct
-import Data.QLogic.BoxProduct (FreeProduct(FreeProd, FreePlus))
-import Data.QLogic.Utils
-import Data.QLogic.IO
-
-import Numeric.LinearProgramming
-import qualified Data.Vector.Unboxed as V
-
-import Data.LinearProgram
-import Data.LinearProgram.GLPK
-
-import Control.Monad.Trans.State.Strict (StateT)
-import Data.Functor.Identity (Identity)
-
-import Control.Monad.State.Class
-
+import Data.Set ( Set, null
+                , difference, union, intersection 
+                , fromList, empty)
+import qualified Data.Set as Set
+-- import Data.Set ( Set, intersection, empty, singleton
+--                 , isProperSubsetOf
+--                 , toList, fromList)
 import Data.Monoid (mappend)
+import Control.Applicative hiding (empty)
 
-data Observable = Observable String [Int]
+import Data.Poset.ConcretePoset
+import Data.QLogic
 
-instance Eq Observable where
-        (Observable na da) == (Observable nb db) = na == nb && da == db
+data Observable = Observable { name :: String
+                             , domain :: [Int] } deriving (Eq, Ord, Show)
 
-instance Ord Observable where
-        (Observable na da) `compare` (Observable nb db) = (na `compare` nb) `mappend` (da `compare` db)
+data AtomicQuestion = AtomicQuestion Observable Int |
+                      Product AtomicQuestion AtomicQuestion deriving (Eq) 
+                      
+instance Show AtomicQuestion where
+    show (AtomicQuestion obs val) = name obs ++ show val
+    show (Product q1 q2) = show q1 ++ show q2
 
-instance Show Observable where
-        show (Observable name domain) = name ++ ": " ++ (show domain) 
+instance Ord AtomicQuestion where
+    q@(AtomicQuestion oq vq) `compare` p@(AtomicQuestion op vp) = cname `mappend` cvals
+        where
+            cname = name oq `compare` name op
+            cvals = vq `compare` vp
+    (Product p1 q1) `compare` (Product p2 q2) = (p1 `compare` p2) `mappend` (q1 `compare` q2)
+    (AtomicQuestion _ _) `compare` (Product _ _) = LT 
+    (Product _ _) `compare` (AtomicQuestion _ _) = GT 
 
-data Question = Question Observable [Int] | NullQuestion | TrivialQuestion
+cprod :: AtomicQuestion -> AtomicQuestion -> AtomicQuestion
+q@(AtomicQuestion _ _) `cprod` p@(AtomicQuestion _ _) 
+    | q <= p = Product q p
+    | otherwise = Product p q
+p@(AtomicQuestion _ _) `cprod` q@(Product q0 qs)
+    | p <= q0 = Product p q
+    | otherwise = Product q0 $ p `cprod` qs
+p@(Product _ _) `cprod` q@(AtomicQuestion _ _) = q `cprod` p
+(Product p q) `cprod` r = p `cprod` (r `cprod` q)
 
-instance Eq Question where
-        NullQuestion == NullQuestion = True
-        NullQuestion == (Question _ []) = True
-        (Question _ []) == NullQuestion = True
-        NullQuestion == _ = False
-        _ == NullQuestion = False
-        TrivialQuestion == TrivialQuestion = True
-        TrivialQuestion == _ = False
-        _ == TrivialQuestion = False
-        (Question _ []) == (Question _ []) = True
-        (Question obsa@(Observable _ adom) a) == (Question obsb@(Observable _ bdom) b) 
-            | a == adom && b == bdom = True
-            | otherwise = obsa == obsb && a == b
+atomicQuestionsOf :: Observable -> [AtomicQuestion]
+atomicQuestionsOf obs = map (AtomicQuestion obs) $ domain obs
 
-instance Ord Question where
-        (Question oa a) `compare` (Question ob b) = (oa `compare` ob) `mappend` (a `compare` b)
+type OneSystem = AtomicQuestion
+type TwoSystems = (AtomicQuestion, AtomicQuestion)
 
-instance POrd Question where
-        NullQuestion .<=. _ = True
-        a .<=. NullQuestion = a == NullQuestion
-        _ .<=. TrivialQuestion = True
-        TrivialQuestion .<=. a = a == TrivialQuestion
-        q@(Question oa a) .<=. p@(Question ob b) 
-            | oa /= ob = False
-            | otherwise = a `isSubset` b
+data PhaseSpace a = PhaseSpace (Set a) deriving (Show)
 
-instance Show Question where
-        show NullQuestion = "Zero"
-        show TrivialQuestion = "One"
-        show (Question _ []) = "Zero"
-        show (Question (Observable name domain) a) 
-            | a == domain = "One"
-            | otherwise = name ++ (show a)
+phaseSpace :: [Observable] -> PhaseSpace OneSystem
+phaseSpace = PhaseSpace . fromList . phaseSpace'
 
-instance Repr Question where
-        repr NullQuestion = "Zero"
-        repr (Question (Observable name _) []) = "Zero"
-        repr (Question (Observable name dom) vs) 
-            | vs == dom = "One"
-            | otherwise = name ++ (concat $ map show vs)
+phaseSpace2 :: [Observable] -> [Observable] -> PhaseSpace TwoSystems
+phaseSpace2 o1 o2 = PhaseSpace $ fromList [(q, p) | q <- phaseSpace' o1, p <- phaseSpace' o2]
 
-questionOf :: Observable -> [Int] -> Question
-questionOf obs v = Question obs $ sort v
+phaseSpace' []     = []
+phaseSpace' (o:[]) = atomicQuestionsOf o
+phaseSpace' (o:os) = cprod <$> atomicQuestionsOf o <*> phaseSpace' os
 
-questionsOf :: Observable -> [Question]
-questionsOf obs@(Observable _ domain) = map (questionOf obs) $ filter (/= domain) $ tail $ subsets domain
+data TwoBoxQuestion = Composite AtomicQuestion AtomicQuestion | OPlus TwoBoxQuestion TwoBoxQuestion
 
-atomicQuestionsOf :: Observable -> [Question]
-atomicQuestionsOf obs@(Observable _ domain) = map (questionOf obs) $ map (:[]) domain
+instance Show TwoBoxQuestion where
+    show (Composite p q) = "[" ++ show p ++ show q ++ "]"
+    show (OPlus p q) = show p ++ "⊕" ++ show q
 
-boxLogic :: [Observable] -> QLogic (Poset Question) Question
-boxLogic os = fromPoset poset ortho
+(<>) = Composite
+(<+>) = OPlus
+
+infixl 5 <>
+infixl 4 <+>
+
+
+boxQRepr2 :: PhaseSpace TwoSystems -> TwoBoxQuestion -> Set TwoSystems
+boxQRepr2 (PhaseSpace phase) (Composite q1 q2) = Set.filter covered phase
     where
-        poset = fromPOrd els
-        els = NullQuestion:TrivialQuestion:(nub $ concat $ map questionsOf os)
-        ortho NullQuestion = TrivialQuestion
-        ortho TrivialQuestion = NullQuestion
-        ortho (Question obs@(Observable _ domain) a) = questionOf obs $ filter (not . (`elem` a)) domain
+        covered (x, y) = (q1 `isBoxMemberOf` x) && (q2 `isBoxMemberOf` y)
+boxQRepr2 phase (OPlus q1 q2) | null $ intersection a b = union a b
+                              | otherwise = empty
+                              where
+                                  a = boxQRepr2 phase q1
+                                  b = boxQRepr2 phase q2
 
-data BoxWorld = BoxWorld { leftBox :: [[Question]]
-                         , rightBox :: [[Question]]
-                         , twoBoxes :: Packed (FreeProduct Question Question)} deriving (Show)
+atomFromRepr :: PhaseSpace TwoSystems -> [TwoBoxQuestion] -> Set TwoSystems -> Maybe TwoBoxQuestion
+atomFromRepr phase atoms q = case filter ((q ==) . boxQRepr2 phase) atoms of
+                               [] -> Nothing
+                               (a:[]) -> Just a
 
-boxWorld :: [Observable] -> [Observable] -> BoxWorld
-boxWorld as bs = BoxWorld { leftBox = lbox 
-                          , rightBox = rbox 
-                          , twoBoxes = packList atoms }
-                          where
-                              lbox = map atomicQuestionsOf as
-                              rbox = map atomicQuestionsOf bs
-                              atoms = [a <> b | a <- concat lbox, b <- concat rbox]
-
-sumWith :: BoxWorld -> Double -> [FreeProduct Question Question] -> [(Double, Int)]
-sumWith boxes c qs = zip (repeat c) $ map (toKey $ twoBoxes boxes) qs
-
-boxStateOn :: BoxWorld -> FreeProduct Question Question -> [(Double, Int)]
-boxStateOn boxes a@(FreeProd _ _) = [(1.0, 1 + toKey (twoBoxes boxes) a)]
-boxStateOn boxes (FreePlus a as) = (1.0, 1 + toKey (twoBoxes boxes) a):(boxStateOn boxes as)
-
-(.-.) :: [(Double, Int)] -> [(Double, Int)] -> [(Double, Int)]
-a .-. b = a ++ (neg b)
+fromRepr :: BWLogic -> PhaseSpace TwoSystems -> [TwoBoxQuestion] -> Set TwoSystems -> [TwoBoxQuestion]
+fromRepr ql phase atoms q = map (toPlus . toAtoms) $ atomicDecomposition ql q 
     where
-        neg = map (\(c, i) -> ((-1.0) * c, i))
+        toAtoms = map (fromJust . atomFromRepr phase atoms)
+        toPlus = foldl1 (<+>) 
 
-qsum :: (Ord a, Ord b) => [FreeProduct a b] -> FreeProduct a b
-qsum (a@(FreeProd _ _):[]) = a
-qsum (a:as) = foldl' (<+>) a as
+isBoxMemberOf :: AtomicQuestion -> AtomicQuestion -> Bool
+q@(AtomicQuestion _ _) `isBoxMemberOf` p@(AtomicQuestion _ _) = p == q
+q@(AtomicQuestion _ _) `isBoxMemberOf` (Product p1 p2) = (q `isBoxMemberOf` p1) 
+                                                         || (q `isBoxMemberOf` p2)
 
-normalizationBounds :: BoxWorld -> [Bound [(Double, Int)]]
-normalizationBounds boxes = [(boxStateOn boxes $ ones a b) :==: 1.0 | a <- leftBox boxes, b <- rightBox boxes]
+boxWorldAtomicQs2 :: [Observable] -> [Observable] -> [TwoBoxQuestion]
+boxWorldAtomicQs2 left right = [Composite qa qb | qa <- allQuestions left, qb <- allQuestions right]
     where
-        ones as bs = qsum [a <> b | a <- as, b <- bs]
+        allQuestions obs = concat $ map atomicQuestionsOf obs
 
-equalWith :: BoxWorld -> (FreeProduct Question Question, FreeProduct Question Question) -> Bound [(Double, Int)]
-equalWith boxes (a, b) = lhs :==: 0.0
+concreteLogic :: (Ord a) => Set a -> [Set a] -> QLogic (ConcretePoset a) (Set a)
+concreteLogic space els = fromPoset (ConcretePoset els) booleanOcmpl 
     where
-        lhs = (boxStateOn boxes a) .-. (boxStateOn boxes b)
+        booleanOcmpl = difference space
 
-nonsignallingBound :: BoxWorld -> [Bound [(Double, Int)]]
-nonsignallingBound boxes = (map (equalWith boxes) lefts) ++ (map (equalWith boxes) rights)
+boxWorldLogic2 :: [Observable] -> [Observable] -> (Set TwoSystems -> [TwoBoxQuestion], QLogic (ConcretePoset TwoSystems) (Set TwoSystems))
+boxWorldLogic2 left right = (fromRepr ql phase atoms, ql)
     where
-        lefts = concat $ map (nsOnLeft bs) $ concat as
-        rights = concat $ map (nsOnRight as) $ concat bs
-        as = leftBox boxes
-        bs = rightBox boxes
+        ql = concreteLogic space els
+        els = nub $ generateConcreteElems $ map (boxQRepr2 phase) atoms
+        atoms = boxWorldAtomicQs2 left right 
+        phase@(PhaseSpace space) = phaseSpace2 left right
 
-hsBoxWorldConstraints boxes = Sparse (normalizationBounds boxes ++ nonsignallingBound boxes)
-
-printBound' :: BoxWorld -> [(Double, Int)] -> String
-printBound' boxes bs = intercalate " + " $ map (\(c, i) -> (printCoeff c) ++ (show $ fromKey p (i - 1))) bs
+generateConcreteElems :: (Ord a) => [Set a] -> [Set a]
+generateConcreteElems [] = [empty]
+generateConcreteElems (a:as) = generateConcreteElems as ++ 
+                                    map (union a) (generateConcreteElems disjoint)
     where
-        printCoeff 1.0 = ""
-        printCoeff v = (show v) ++ "*" 
-        p = twoBoxes boxes
+        disjoint = filter (null . intersection a) as
 
-printBound :: BoxWorld -> Bound [(Double, Int)] -> String
-printBound boxes (bs :<=: b) = printBound' boxes bs ++ " <= " ++ show b
-printBound boxes (bs :==: b) = printBound' boxes bs ++ " == " ++ show b
+type BWLElem = Set TwoSystems
+type BWLogic = QLogic (ConcretePoset TwoSystems) (Set TwoSystems)
 
-printBounds boxes (Sparse bds) = unlines $ map (printBound boxes) bds
+-- 
+-- data TwoBoxState p = TwoBoxState (Map Question2 p)
+-- 
+-- toState :: (Real p) => TwoBoxState p -> State (QLogic (ConcretePoset TwoSystems) (Set TwoSystems) p
+-- toState (TwoBoxState prstate) = \(
 
-hsIsQ boxes constr q 
-    | q == NullQuestion <> NullQuestion = True
-    | otherwise = case simplex prob constr [] of
-                      Optimal (p, _) -> p <= 1.0
-                      otherwise -> False
-                      where
-                          prob = Maximize $ toDense n $ boxStateOn boxes q
-                          n = 1 + (packedLength $ twoBoxes boxes)
+-- data Question where
+--    Question :: Observable -> IntSet -> Question
+--    Null :: Question
+--    Trivial :: Question
+--    Product :: Question -> Question -> Question  
+--    
+-- instance Show Question where
+--     show (Question obs val) = name obs ++ "{" ++ intercalate "," (map show $ toList val) ++ "}"
+--     show Null = "∅"
+--     show Trivial = "1"
+--     show (Product q1 q2) = show q1 ++ show q2
+-- 
+-- instance Eq Question where
+--     Null == Null = True
+--     Trivial == Trivial = True
+--     (Question o1 v1) == (Question o2 v2) = o1 == o2 && v1 == v2
+--     (Product q1 p1) == (Product q2 p2) = q1 == q2 && p1 == p2
+-- 
+-- instance Ord Question where
+--     Null `compare`  _   = LT
+--     _    `compare` Null = GT 
+--     _    <= Trivial = True
+--     (Question obs val) <= (Question obs val) = 
 
-hsIsQ' boxes constr q 
-    | q == NullQuestion <> NullQuestion = Nothing
-    | otherwise = Just $ simplex prob constr [] 
-    where
-        prob = Maximize $ toDense n $ boxStateOn boxes q
-        n = 1 + (packedLength $ twoBoxes boxes)
+-- question :: Observable -> IntSet -> Question
+-- question obs val
+--     | val `isProperSubsetOf` domain obs = Question obs val
+--     | val == domain obs = Trivial
+--     | otherwise = Null
 
-hsIsLess boxes constr a b
-    | a == z = True
-    | b == z = False
-    | otherwise = case simplex prob constr [] of
-                      Optimal (p, _) -> p <= 0.0
-                      otherwise -> False
-                      where
-                          prob = Maximize $ toDense n $ (boxStateOn boxes a .-. boxStateOn boxes b)
-                          n = 1 + (packedLength $ twoBoxes boxes)
-                          z = NullQuestion <> NullQuestion
-
-toDense :: Int -> [(Double, Int)] -> [Double]
-toDense n a = V.toList $ V.accum (+) (V.replicate n 0.0) $ map (\(v, i) -> (i - 1, v)) a
-
--- nsLeft :: [[Questions]] -> Question -> ound [(Double, Int)]
-nsOnLeft bbs a = pairs [qsum [a <> b | b <- bs] | bs <- bbs]
-nsOnRight aas b = pairs [qsum [a <> b | a <- as] | as <- aas]
-
-ssimplexDefaults = SimplexOpts MsgOff 10000 True
-
-boxWorldLPVars :: (Ord a, Ord b) => [a] -> [b] -> [FreeProduct a b]
-boxWorldLPVars as bs = [a <> b | a <- as, b <- bs]
-
-normalization :: (Ord a, Ord b) => [[a]] -> [[b]] -> [LinFunc (FreeProduct a b) Int]
-normalization as bs = map varSum [boxWorldLPVars a b | a <- as, b <- bs]
-
-nonsignalling :: (Ord a, Ord b) => [[a]] -> [[b]] -> 
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-nonsignalling as bs = lefts ++ rights
-    where
-        lefts = concat $ map (nsLeft bs) $ concat as
-        rights = concat $ map (nsRight as) $ concat bs
-
-nsLeft :: (Ord a, Ord b) => [[b]] -> a ->
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-nsLeft bbs a = pairs [varSum [a <> b | b <- bs] | bs <- bbs]
-
-nsRight :: (Ord a, Ord b) => [[a]] -> b ->
-    [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-nsRight aas b = pairs [varSum [a <> b | a <- as] | as <- aas]
-
--- | Objective function representing value on a state
-objValue :: (Ord a, Ord b) => FreeProduct a b -> LinFunc (FreeProduct a b) Int
-objValue a@(FreeProd _ _) = var a
-objValue (FreePlus a as) = (var a) ^+^ objValue as
-
--- | Objective function used to compute order relation
-objLess :: (Ord a, Ord b) => FreeProduct a b -> FreeProduct a b -> LinFunc (FreeProduct a b) Int
-objLess a b = (objValue a) ^-^ (objValue b)
-
-isBWQuestion :: (Ord b, Ord a) => BWConstraints a b -> FreeProduct a b -> IO Bool
-isBWQuestion constr a 
-        | a == zeroElem constr = return True
-        | otherwise = do
-            (_, Just (maxp, _)) <- glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
-            -- putStrLn $ show $ obj
-            return (maxp <= 1.0)
-            where
-                obj = objValue a
-
-isBWLess :: (Ord a, Ord b) => BWConstraints a b -> FreeProduct a b -> FreeProduct a b -> IO Bool
-isBWLess constr a b 
-        | a == zeroElem constr = return True
-        | b == zeroElem constr = return False
-        | otherwise = do
-            (_, Just (maxp, _)) <- {-# SCC solver #-} glpSolveVars ssimplexDefaults $ boxWorldLogicSolver constr obj
-            return (not $ maxp > 0.0)
-            where
-                obj = objLess a b
-
-boxWorldLogicSolver :: (Ord b, Ord a) => BWConstraints a b -> LinFunc (FreeProduct a b) Int -> LP (FreeProduct a b) Int
-boxWorldLogicSolver constr obj = execLPM $ do
-    setDirection Max
-    setObjective obj
-    mapM_ (\f -> equalTo f 1) $ normConstr constr
-    mapM_ (\(f, g) -> equal f g) $ nonsigConstr constr
-    mapM_ (\v -> varGeq v 0) $ vars constr
-    mapM_ (\v -> setVarKind v ContVar) $ vars constr
-
--- boxWorldLogicSolver :: (Ord b, Ord a) => BWConstraints a b -> LinFunc (FreeProduct a b) Int -> LP (FreeProduct a b) Int
-boxWorldLogicSolver' constr =  do
-    setDirection Max
-    -- setObjective obj
-    mapM_ (\f -> equalTo f 1) $ normConstr constr
-    mapM_ (\(f, g) -> equal f g) $ nonsigConstr constr
-    mapM_ (\v -> varGeq v 0) $ vars constr
-    mapM_ (\v -> setVarKind v ContVar) $ vars constr
-
-addObj lp obj = do
-        setObjective obj
-        return
-
-boxWorldConstraints :: (Ord a, Ord b) => FreeProduct a b -> [[a]] -> [[b]] -> BWConstraints a b 
-boxWorldConstraints z as bs = BWConstraints { normConstr = normalization as bs
-                                            , nonsigConstr = nonsignalling as bs
-                                            , vars = boxWorldLPVars (concat as) (concat bs)
-                                            , zeroElem = z }
-
-data BWConstraints a b = BWConstraints { normConstr :: [LinFunc (FreeProduct a b) Int]
-                                       , nonsigConstr :: [(LinFunc (FreeProduct a b) Int, LinFunc (FreeProduct a b) Int)]
-                                       , vars :: [FreeProduct a b]
-                                       , zeroElem :: FreeProduct a b }
-
-pairs :: [a] -> [(a, a)]
-pairs [] = []
-pairs (a:as) = (map (\b -> (a, b)) as) ++ pairs as

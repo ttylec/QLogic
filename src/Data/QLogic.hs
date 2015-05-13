@@ -6,6 +6,7 @@ module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpac
                    , disjointIn
                    , ocmplIn, zeroOf, oneOf
                    , atomsOf
+                   , atomicDecomposition
                    , mutuallyDisjointIn, mutuallyCompatibleIn
                    , checkLogic, checkLattice, checkBoolean
                    , checkOrderReverse, checkOrthoIdempotence
@@ -14,6 +15,7 @@ module Data.QLogic (QLogic(QLogic), fromPoset, quotientQLogic, packQLogic, unpac
                    , compatibleIn
                    ) where
 
+import Data.List
 import Data.Maybe
 import Control.Monad
 import Control.Parallel.Strategies
@@ -286,3 +288,9 @@ mutuallyCompatibleIn ql = mutuallyBy (compatibleIn ql)
 mutuallyBy :: (a -> a -> Bool) -> [a] -> Bool
 mutuallyBy _ [] = True
 mutuallyBy f (a:as) = (all (f a) as) && mutuallyBy f as
+
+atomicDecomposition :: (Eq a) => QLogic p a -> a -> [[a]]
+atomicDecomposition ql a = filter (sumUpTo a) . subsetsBy (disjointIn ql) . atomsOf $ ql 
+    where
+        sumUpTo a [] = False
+        sumUpTo a (b:bs) = foldl' (unsafeSupIn ql) b bs == a
