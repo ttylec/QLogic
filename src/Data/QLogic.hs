@@ -26,7 +26,8 @@ import Data.Poset
 import Data.Poset.ConcretePoset
 import Data.QLogic.Utils
 
-import qualified Data.Set as Set
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 -- | Quantum logic 
 --
 -- Quantum logic is defined as a set with partial order
@@ -87,17 +88,17 @@ instance (Eq a, POrdStruct p a) => QLogicStruct (QLogic p a) a where
     zeroOf (QLogic  _ _ z _) = z
     oneOf (QLogic  _ _ _ o) = o
 
-newtype CLogic a = CLogic (QLogic (ConcretePoset a) (Set.Set a))
+newtype CLogic = CLogic (QLogic ConcretePosetInt IntSet)
 
-instance POrdStruct (CLogic a) (Set.Set a) where
+instance POrdStruct CLogic IntSet where
     elementsOf (CLogic ql) = elementsOf ql
     lessIn (CLogic ql) = lessIn ql
     supIn (CLogic ql) = supIn ql
 
-instance (Ord a) => QLogicStruct (CLogic a) (Set.Set a) where
+instance QLogicStruct CLogic IntSet where
     ocmplIn (CLogic ql) = ocmplIn ql
-    orthoIn ql a b = Set.null $ Set.intersection a b
-    compatIn ql a b = Set.intersection a b `elem` elementsOf ql
+    orthoIn ql a b = IntSet.null $ IntSet.intersection a b
+    compatIn ql a b = IntSet.intersection a b `elem` elementsOf ql
     zeroOf (CLogic ql) = zeroOf ql
     oneOf (CLogic ql) = oneOf ql
 
