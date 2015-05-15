@@ -52,7 +52,7 @@ phaseSpace1' obs = map (OneSystem . Map.fromList) $ tuples [[(name o, k) | k <- 
         tuples (v:[]) = map (:[]) v
         tuples (v:vs) = [p:ps | p <- v, ps <- tuples vs]
 
-data AtomicQuestion = AtomicQuestion Char Int
+data AtomicQuestion = AtomicQuestion Char Int | Null | Trivial
 data Question a = Primitive a | OPlus (Question a) (Question a)
 
 instance Show AtomicQuestion where
@@ -96,10 +96,12 @@ askAtomicOne :: AtomicQuestion -> OneSystem -> Bool
 askAtomicOne (AtomicQuestion a alpha) (OneSystem p) = case Map.lookup a p of
         Just x  -> x == alpha
         Nothing -> False
+askAtomicOne Null _          = False
+askAtomicOne Trivial _       = True
 
 askQA :: (Foldable a, Applicative a) => Question (a AtomicQuestion) -> a OneSystem -> Bool
 askQA (Primitive a) p = and $ liftA2 askAtomicOne a p 
-askQA (OPlus a b) p = askQA a p || askQA b p 
+askQA (OPlus a b) p   = askQA a p || askQA b p 
 
 instance Applicative One where
     pure a = One a
