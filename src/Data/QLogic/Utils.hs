@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, BangPatterns #-}
-module Data.QLogic.Utils (implies, iff, subsets, subsetsBy
+module Data.QLogic.Utils (implies, iff, mutuallyBy, subsets, subsetsBy, tuples --, subsetsBy', subsets'
                          , Equiv(Equiv), liftFunc, liftFunc2, quotientBy
                          , equivRepr, equivLookup
                          , Packed(Packed), packedElements, packList
@@ -13,6 +13,7 @@ import Data.List
 import qualified Data.Map.Strict as Map
 import qualified Data.Vector as V
 
+-- import Control.Monad
 -- |
 -- = Auxiliary data structures and functions
 -- 
@@ -44,16 +45,45 @@ iff True True = True
 -- |
 -- == Combinatorial operations
 
+-- |Utitlity function to perform "mutuall" tests.
+mutuallyBy :: (a -> a -> Bool) -> [a] -> Bool
+mutuallyBy _ [] = True
+mutuallyBy f (a:as) = (all (f a) as) && mutuallyBy f as
+
+-- |List of tuples of given length with values from vals.
+tuples :: [a] -> Int -> [[a]]
+tuples vals n = mapM (const vals) [0..n-1]
+
 -- | Subsets of a given list (uniqueness of elements is not checked)
 subsets :: [a] -> [[a]]
 subsets [] = [[]]
 subsets (x:xs) = subsets xs ++ map (x:) (subsets xs)
 
--- | Subsets of a given list, such that elements of each subset
--- satisfy given binary and /transitive/ relation.
+-- choose :: [a] -> Int -> [[a]]
+-- choose _ 0 = [[]]
+-- choose [] _ = []
+-- choose (x:xs) k = (x:) `fmap` (xs `choose` (k-1)) ++ xs `choose` k
+
+-- subsets' :: [a] -> [[a]]
+-- subsets' xs = concat $ map (xs `choose`) [0..length xs] 
+--
+-- This is clever implementation, but I don't yet understand how it works,
+-- but maybe this could lead to more efficient subsetsBy implementation.
+-- subsets' = filterM (const [True, False])
+-- | Subsets of a given list, such that elements 
+-- pairwisely satisfy given binary and transitive relation.
+-- 
+-- Properties:
+-- > all (mutuallyBy pred) (subsetsBy pred ls) == True
+-- 
+-- It's a manual rewrite of:
+-- > subsetsBy pred ls@(x:xs) = filter (mutuallyBy pred) $ subsets ls
 subsetsBy :: (a -> a -> Bool) -> [a] -> [[a]]
 subsetsBy _ [] = [[]]
 subsetsBy pred (x:xs) = subsetsBy pred xs ++ map (x:) (subsetsBy pred $ filter (pred x) xs)
+
+-- subsetsBy' :: (a -> a -> Bool) -> [a] -> [[a]]
+-- subsetsBy' pred xs = filter (mutuallyBy pred) $ subsets' xs
 
 -- | Data type reprenting equivalence class as sets
 data Equiv a where

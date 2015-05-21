@@ -10,3 +10,5 @@ src/concrete
 src/statetests
 BoxWorld-old.hs
 concrete3
+.cabal-sandbox
+cabal.sandbox.config
