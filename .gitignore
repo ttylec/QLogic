@@ -12,3 +12,8 @@ BoxWorld-old.hs
 concrete3
 .cabal-sandbox
 cabal.sandbox.config
+src/#concrete.hs#
+src/22boxworld
+src/22boxworld.lhs
+src/subsetEffTest
+src/subsetEffTest.hs
