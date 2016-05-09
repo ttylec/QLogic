@@ -17,3 +17,6 @@ src/22boxworld
 src/22boxworld.lhs
 src/subsetEffTest
 src/subsetEffTest.hs
+.stack-work
+*.o
+*.hi

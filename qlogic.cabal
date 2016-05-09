@@ -7,16 +7,13 @@ name:                qlogic
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
 version:             0.1.0.0
-synopsis:            Framework for quantum logics
+synopsis:            Tools for quantum logic
 description:         Provides data structures and function for symbolic manipulation of quantum logic structures.
 homepage:            https://github.com/ttylec/QLogic/
-license:             GPL-3
+license:             MIT
 license-file:        LICENSE
 author:              Tomasz Tylec
 maintainer:          ttylec@gmail.com
-
--- A copyright notice.
--- copyright:           
 
 category:            Math
 build-type:          Simple
@@ -29,33 +26,35 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Data.Poset, Data.Poset.Examples, Data.Relation, 
-                       Data.Poset.ConcretePoset,
-                       Data.QLogic, 
-                       Data.QLogic.Examples, Data.QLogic.Examples.NonTrivial3
-                       Data.QLogic.BoxProduct, Data.QLogic.Concrete,
-                       Data.QLogic.States,
-                       Data.QLogic.BoxWorld,
-                       Data.QLogic.IO, Data.QLogic.Utils
+  exposed-modules:     QLogic, QLogic.Examples, QLogic.Examples.NonTrivial3
+                       QLogic.Poset, QLogic.Poset.Examples, 
+                       QLogic.Relation, 
+                       QLogic.Poset.ConcretePoset,
+                       QLogic.BoxProduct, 
+                       QLogic.Concrete,
+                       QLogic.States,
+                       QLogic.BoxWorld,
+                       QLogic.IO, QLogic.Utils
  
   -- Modules included in this library but not exported.
   other-modules:       
   
   -- LANGUAGE extensions used by modules in this package.
-  other-extensions:    GADTs, BangPatterns
+  other-extensions:    GADTs, 
+                       MultiParamTypeClasses, FunctionalDependencies,
+                       FlexibleInstances
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7, mtl >=2.1, 
                        repa >=3.3, containers >=0.5, 
                        vector >=0.10, parallel >= 3.2,
-                       monad-par >=0.3, glpk-hs >=0.3,
-                       hmatrix-glpk >=0.4,
+                       monad-par >=0.3,
                        transformers >=0.3,
                        random >= 1.0,
                        attoparsec >= 0.12, bytestring >= 0.10
   
   -- Directories containing source files.
-  hs-source-dirs:      . 
+  hs-source-dirs:      src/ 
   
   -- Base language which the package is written in.
   default-language:    Haskell2010
