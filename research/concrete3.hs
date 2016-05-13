@@ -33,9 +33,9 @@ main = do
     print $ q2set a
     print $ q2set b
     print $ set2q . q2set $ b
-    -- print "Number of 
+    -- print "Number of
     -- print $ sum . map (length . set2q) $ elementsOf ql
     print $ q2set c == q2set c'
-    print $ compatIn logic (q2set a) (q2set b) 
+    print $ compatIn logic (q2set a) (q2set b)
     print $ compatIn ql a b
     print $ length . elementsOf $ ql

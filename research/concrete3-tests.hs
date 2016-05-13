@@ -1,14 +1,13 @@
-import Data.QLogic.BoxWorld
-import Data.QLogic
+import QLogic.BoxWorld
+import QLogic
 
 import Data.List
-import Data.Poset.ConcretePoset
-import Data.QLogic
+import QLogic.Poset.ConcretePoset
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
-import Data.QLogic.Utils
+import QLogic.Utils
 import Data.Maybe
 
 x = Observable 'X' [0, 1]
@@ -33,10 +32,10 @@ main = do
     -- print $ q2set a
     -- print $ q2set b
     -- print $ set2q . q2set $ b
-    -- -- print "Number of 
+    -- -- print "Number of
     -- -- print $ sum . map (length . set2q) $ elementsOf ql
     -- print $ q2set c == q2set c'
-    -- print $ compatIn logic (q2set a) (q2set b) 
+    -- print $ compatIn logic (q2set a) (q2set b)
     -- print $ compatIn ql a b
     print $ length . elementsOf $ ql
     print $ isLogic logic

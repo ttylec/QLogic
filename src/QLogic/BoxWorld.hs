@@ -188,7 +188,7 @@ phaseSpace1' :: [Observable] -> [Point]
 phaseSpace1' obs = map (Point . Map.fromList) $ tups [[(name o, k) | k <- domain o] | o <- obs]
     where
         tups []     = []
-        tups (v:[]) = map (:[]) v
+        tups [v] = map (:[]) v
         tups (v:vs) = [p:ps | p <- v, ps <- tups vs]
 
 data Atomic = Atomic Char Int | Null | Trivial deriving (Eq, Ord)

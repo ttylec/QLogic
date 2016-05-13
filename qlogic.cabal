@@ -27,7 +27,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     QLogic, QLogic.Examples, QLogic.Examples.NonTrivial3
-                       QLogic.Poset, QLogic.Poset.Examples, 
+                       QLogic.Poset, QLogic.Poset.Generic, QLogic.Poset.Examples, 
                        QLogic.Relation, 
                        QLogic.Poset.ConcretePoset,
                        QLogic.BoxProduct, 
@@ -51,7 +51,9 @@ library
                        monad-par >=0.3,
                        transformers >=0.3,
                        random >= 1.0,
-                       attoparsec >= 0.12, bytestring >= 0.10
+                       attoparsec >= 0.12, bytestring >= 0.10,
+                       glpk-hs >= 0.3.5,
+                       hmatrix >= 0.17
   
   -- Directories containing source files.
   hs-source-dirs:      src/ 
