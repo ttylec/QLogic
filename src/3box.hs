@@ -35,14 +35,26 @@ type Box3 = Three Box
 instance Show Box where
   show (Box o i) = o : show i
 
-infixl 4 :@:
+infixr 4 :@:
 
-data Proposition a = Atom a | (Proposition a) :@: (Proposition a)
-                   deriving (Show)
+data Proposition a = Atom a | a :@: (Proposition a) deriving (Ord, Eq)
+
+instance Show a => Show (Proposition a) where
+  show (Atom a) = show a
+  show (a :@: b) = show a ++ "+" ++ show b
 
 instance Foldable Proposition where
   foldMap f (Atom a) = f a
-  foldMap f (a :@: b) = foldMap f a `mappend` foldMap f b
+  foldMap f (a :@: b) = f a `mappend` foldMap f b
+
+(.@.) :: Ord a => Proposition a -> Proposition a -> Proposition a
+(Atom a) .@. (Atom b)        | a <= b    = a :@: Atom  b
+                             | otherwise = b :@: Atom a
+(Atom a) .@. p@(b :@: c)     | a <= b    = a :@: p
+                             | otherwise = b :@: (Atom a .@. c)
+(a :@: b) .@. p = Atom a .@. b .@. p
+
+infixr 5 .@.
 
 -- |All box questions on given input
 boxes :: Char -> [Box]
@@ -62,7 +74,7 @@ idDecomp1 = [boxes 'X', boxes 'Y']
 -- |in three boxes (thanks to Traversable Three!)
 idDecomp3 = three <$> idDecomp1 <*> idDecomp1 <*> idDecomp1
 
-gyni = foldl1' (:@:) $ map Atom gyniboxes
+gyni = foldl1' (.@.) $ map Atom gyniboxes
 
 gyniboxes = map Three [ (Box 'X' 0, Box 'X' 0, Box 'X' 0)
                       , (Box 'X' 1, Box 'Y' 1, Box 'Y' 0)
@@ -72,7 +84,7 @@ gyniboxes = map Three [ (Box 'X' 0, Box 'X' 0, Box 'X' 0)
 
 toLinFunc :: Proposition Box3 -> LinFunc Box3 Int
 toLinFunc (Atom a) = var a
-toLinFunc (a :@: b) = toLinFunc a ^+^ toLinFunc b
+toLinFunc (a :@: b) = var a ^+^ toLinFunc b
 
 boxConstraints :: LPM Box3 Int ()
 boxConstraints =
@@ -123,7 +135,7 @@ _      `choose` 0 = [[]]
 (x:xs) `choose` k =  (x:) `fmap` (xs `choose` (k-1)) ++ xs `choose` k
 
 summable :: Proposition Box3 -> Proposition Box3 -> Bool
-summable p q = maxStateValue (p :@: q) <= 1
+summable p q = maxStateValue (p .@. q) <= 1
 
 maxStateValue :: Proposition Box3 -> Double
 maxStateValue p = unsafeSolveLP lp
@@ -170,7 +182,7 @@ coefficientVector vars f = accum (konst 0 n) (+) $ map (\(k, v) -> (varToInt k, 
 
 -- |Parsers (adopted from QLogic.BoxWorld, we probably want to unify types)
 
-instance (System a) => Read (Proposition (a Box)) where
+instance (System a, Ord (a Box)) => Read (Proposition (a Box)) where
     readsPrec p = either (const []) id . parseOnly parseQ' . pack
         where
             parseQ' = do
@@ -178,10 +190,10 @@ instance (System a) => Read (Proposition (a Box)) where
                 rest <- takeByteString
                 return [(q, unpack rest)]
 
-parseQ :: (System a) => Parser (Proposition (a Box))
+parseQ :: (System a, Ord (a Box)) => Parser (Proposition (a Box))
 parseQ = do
     qs <- parseSAQ `sepBy` (char '+')
-    return . foldl1' (:@:) . map Atom $ qs
+    return . foldl1' (.@.) . map Atom $ qs
 
 parseSAQ :: (System a) => Parser (a Box)
 parseSAQ = do
@@ -199,13 +211,13 @@ parseAQ =  do
 makeAllSums :: [Proposition Box3] -> [Proposition Box3] -> [Proposition Box3]
 makeAllSums e atoms = e ++ concatMap sums e
   where
-    sums p = map (p :@:) $ filter (summable p) atoms
+    sums p = map (p .@.) $ filter (summable p) atoms
 
 allSums :: [Proposition Box3] -> [Proposition Box3]
 allSums []     = []
 allSums (a:as) = a:sums ++ allSums as
   where
-    sums = allSums . map (a :@: ) . filter (summable a) $ as
+    sums =  map (a .@. ) . allSums .filter (summable a) $ as
 
 unique [] = []
 unique (a:as) = a:unique (filter (not . equalP a) as)
@@ -222,15 +234,23 @@ main = do
       q2 = read "[X0X0Y0]+[X0X0Y1]" :: Proposition Box3
       q3 = read "[X0Y0Y0]+[X0Y0Y1]" :: Proposition Box3
       x  = read "[X0X0X0]" :: Proposition Box3
+      one = map read [ "[X0X0X0]", "[X0X0X1]", "[X0X1X0]", "[X0X1X1]"
+                     , "[X1X0X0]", "[X1X0X1]", "[X1X1X0]", "[X1X1X1]"
+                     ] :: [Proposition Box3]
   print $ equalP q1 q2
   print $ equalP q2 q3
   print $ summable x x
   -- let g1 = makeAllSums box3Atoms (take 8 box3Atoms)
   let g1 = makeAllSums box3Atoms box3Atoms
       g2 = makeAllSums g1 box3Atoms
-  -- print $ allSums (take 32 box3Atoms)
-  -- print $ length $ allSums box3Atoms
-  print $ equalP <$> box3Atoms <*> box3Atoms
+  -- putStrLn $ unlines $ map show $ allSums (take 8 box3Atoms)
+  -- putStrLn $ unlines $ map show $ allSums box3Atoms
+  print $ length $ allSums (take 32 box3Atoms)
+  -- print $ equalP <$> box3Atoms <*> box3Atoms
   -- print $ length g1
   -- print $ length g2
   -- print $ map (length . sump) box3Atoms
+  -- print $ maxStateValue . foldl1' (.@.) $ one
+  -- print $ map (summable (one !! 7)) $ scanl1 (.@.) one
+  -- print $ map (`elem` box3Atoms) one
+  -- print $ length $ allSums one
