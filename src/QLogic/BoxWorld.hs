@@ -70,7 +70,9 @@ phasePoints (PhaseSpace a) = Set.toList a
 -- what we require is that a data type representing physical
 -- system is *Traversable* and *Applicative*. Detailed
 -- discussion of why can be find in instance declarations.
-class (Traversable a, Applicative a) => System a where
+class (Traversable s, Applicative s) => System s where
+  shifts   :: [s a -> s a]
+  unshifts :: [s a -> s a]
 
 -- |Types representing single system, and composite systems
 -- consisting of two and three parties.
@@ -106,14 +108,35 @@ newtype One a = One a deriving (Eq, Foldable, Functor, Ord, Traversable)
 newtype Two a = Two (a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
 newtype Three a = Three (a, a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
 
-instance System One
-instance System Two
-instance System Three
+one :: a -> One a
+one = One
+
+two :: a -> a -> Two a
+two a b = Two (a, b)
+
+three :: a -> a -> a -> Three a
+three a b c = Three (a, b, c)
+
+instance System One where
+  shifts   = [id]
+  unshifts = [id]
+
+instance System Two where
+  shifts   = [id, \ (Two (a, b)) -> Two (b, a)]
+  unshifts = [id, \ (Two (a, b)) -> Two (b, a)]
+
+instance System Three where
+  shifts = [ id, shift, shift . shift ]
+    where
+      shift (Three (a, b, c)) = Three (c, a, b)
+  unshifts = [ id, shift, shift . shift ]
+    where
+      shift (Three (a, b, c)) = Three (b, c, a)
 
 -- |Applicative for single system is trivial,
 -- and it seems that the only possible.
 instance Applicative One where
-    pure a = One a
+    pure = One
     (One f) <*> (One a) = One $ f a
 
 -- Check laws:
@@ -167,7 +190,7 @@ instance Applicative Three where
 -- and then we construct list for composite system from
 -- lists for components.
 -- TODO improve this documentation.
-combineWith :: (Traversable a, Applicative f) => (f b -> f c) -> a (f b) -> f (a c)
+combineWith :: (Traversable a, Applicative f) => (b -> f c) -> a b -> f (a c)
 combineWith f = sequenceA . fmap f
 
 -- |Build a phase space of a classical system, given the list of observables.

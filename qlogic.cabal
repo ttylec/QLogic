@@ -28,6 +28,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     QLogic, QLogic.Examples, QLogic.Examples.NonTrivial3
                        QLogic.Poset, QLogic.Poset.Generic, QLogic.Poset.Examples, 
+                       QLogic.GeneralBoxes
                        QLogic.Relation, 
                        QLogic.Poset.ConcretePoset,
                        QLogic.BoxProduct, 
