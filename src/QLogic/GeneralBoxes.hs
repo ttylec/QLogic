@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleContexts, GADTs #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE DeriveFoldable        #-}
 {-# LANGUAGE DeriveFunctor         #-}
@@ -17,29 +17,202 @@ import System.IO.Unsafe(unsafePerformIO)
 import Numeric.LinearAlgebra.Data
 import Numeric.LinearAlgebra
 
-import QLogic.Utils
-import QLogic.BoxWorld hiding (Question)
+import Data.Attoparsec.ByteString.Char8 hiding (take)
+import Data.ByteString.Char8 (pack, unpack)
+
+-- |Represents discrete valued observable, named *name* with domain *domain*.
+-- Domain is usually set [0..k], where k is number of distinct outputs.
+-- Storing as a list is convenient for question construction.
+data Observable = Observable { name   :: Char
+                             , domain :: [Int] } deriving (Eq, Ord, Show)
+
+-- |We define an alias for data type class that will represent
+-- physical systems, single or composed.
+--
+-- We want to discuss either single or composite systems
+-- in typesafe manner. We want to distinguish between
+-- number of parties and have some tools to compose single
+-- systems into composite systems. It appeared that
+-- what we require is that a data type representing physical
+-- system is *Traversable* and *Applicative*. Detailed
+-- discussion of why can be find in instance declarations.
+class (Traversable s, Applicative s) => System s where
+  shifts   :: [s a -> s a]
+  unshifts :: [s a -> s a]
+
+-- |Types representing single system, and composite systems
+-- consisting of two and three parties.
+--
+-- We have simple product structure, parametrized by one
+-- type. The type does not distinguish different systems,
+-- but type of the property that we discuss.
+-- In this work, this is either the phase space point
+-- or an elementary question (*Atomic*) about
+-- some property.
+--
+-- The interesting thing is that only the *Applicative*
+-- instance cannot be automaticaly derived.
+--
+-- We derive *Foldable* to be able to call *and* function.
+-- For example, by asking a pair of questions p, q on
+-- 2-party system we obtain as a result Two Bool type.
+-- We want to reduce answer to composite system.
+--
+-- We derive *Functor*, because we want to transform
+-- between considered properties. E.g. for the question
+-- on two-party system we want to be able to compute
+-- a phase space subset of two-party system.
+--
+-- *Traversable* instance is required because of
+-- > sequenceA :: (Traversable t, Applicative f) => t (f a) -> f (t a)
+-- We use it only for lists. For example, having
+-- Two [a] we would like to get [Two a].
+-- Interpretation is straightforward: having a Two
+-- lists of some qualites of components we want to construct
+-- a list of qualities for the whole two-party system.
+newtype One a = One a deriving (Eq, Foldable, Functor, Ord, Traversable)
+newtype Two a = Two (a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
+newtype Three a = Three (a, a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
+
+one :: a -> One a
+one = One
+
+two :: a -> a -> Two a
+two a b = Two (a, b)
+
+three :: a -> a -> a -> Three a
+three a b c = Three (a, b, c)
+
+instance (Show a) => Show (One a) where
+    show (One a) = "[" ++ show a ++ "]"
+
+instance (Show a) => Show (Two a) where
+    show (Two (a, b)) = "[" ++ show a ++ show b ++ "]"
+
+instance (Show a) => Show (Three a) where
+    show (Three (a, b, c)) = "[" ++ show a ++ show b ++ show c ++ "]"
+
+instance System One where
+  shifts   = [id]
+  unshifts = [id]
+
+instance System Two where
+  shifts   = [id, \ (Two (a, b)) -> Two (b, a)]
+  unshifts = [id, \ (Two (a, b)) -> Two (b, a)]
+
+instance System Three where
+  shifts = [ id, shift, shift . shift ]
+    where
+      shift (Three (a, b, c)) = Three (c, a, b)
+  unshifts = [ id, shift, shift . shift ]
+    where
+      shift (Three (a, b, c)) = Three (b, c, a)
+
+-- |Applicative for single system is trivial,
+-- and it seems that the only possible.
+instance Applicative One where
+    pure = One
+    (One f) <*> (One a) = One $ f a
+
+-- Check laws:
+-- identity:
+-- > pure id <*> One v = One id <*> One v = One $ id v = One v -- OK
+-- composition:
+-- > pure (.) <*> One u <*> One v <*> One w = One (.) <*> One u <*> One v <*> One w
+-- > = One ( (.) u ) <*> One v <*> One w = One ( u . v ) <*> One w = One (u . v $ w)
+-- on the other hand:
+-- > One u <*> (One v <*> One w) = One u <*> One (v w) = One $ u (v w) -- OK
+-- homomorphism
+-- > pure f <*> pure x = One f <*> One x = One $ f x = pure $ f x -- OK
+-- interchange:
+-- > One u <*> pure y = One $ u y
+-- > pure ($ y) <*> One u = One ($ y) <*> One u = One (($ y) u) = One (u $ y) -- OK
+
+-- |Applicative instance for two-party system is straightforward:
+-- we have simple product structure.
+instance Applicative Two where
+    pure a = Two (a, a)
+    (Two (f, g)) <*> (Two (a, b)) = Two (f a, g b)
+
+-- Check laws:
+-- identity:
+-- > pure id <*> Two (v, w) = Two (id, id) <*> Two (v, w) = Two $ (id v, id w) = Two (v, w) -- OK
+-- composition:
+-- > pure (.) <*> Two (u, u') <*> Two (v, v') <*> Two (w, w')
+-- > = Two ((.), (.)) <*> Two (u, u') <*> Two (v, v') <*> Two (w, w')
+-- > = Two ( (.) u, (.) u' ) <*>  Two (v, v') <*> Two (w, w')
+-- > = Two ( u . v, u . v' ) <*> Two (w, w') = Two (u . v $ w, u' . v' $ w')
+-- on the other hand:
+-- > Two (u, u') <*> (Two (v, v') <*> Two (w, w'))
+-- > = Two (u, u') <*> Two (v w, v' w) = Two (u (v w), u' (v' w')) -- OK
+-- homomorphism
+-- > pure f <*> pure x = Two (f, f) <*> Two (x, x) = Two (f x, f x) = pure $ f x -- OK
+-- interchange:
+-- > Two (u, v) <*> pure y = Two (u y, v y)
+-- > pure ($ y) <*> Two (u, v) = Two ($ y, $ y) <*> Two (u, v)
+-- > = Two (($ y) u, ($ y) v) = Two (u $ y, v $ y) -- OK
+
+-- |Analogously we define instance for three-party system.
+instance Applicative Three where
+    pure a = Three (a, a, a)
+    (Three (f, g, h)) <*> (Three (a, b, c)) = Three (f a, g b, h c)
+
+-- |Helper function. Like *sequenceA* for *One*, *Two*, etc. is used
+-- only for lists here.
+-- This function specialize to
+-- > combineWith :: ([b] -> [c]) -> a [b] -> a [c].
+-- This simply applies some function that transforms list of properties
+-- and then we construct list for composite system from
+-- lists for components.
+-- TODO improve this documentation.
+combineWith :: (Traversable a, Applicative f) => (b -> f c) -> a b -> f (a c)
+combineWith f = sequenceA . fmap f
 
 data Box = Box !Char !Int deriving (Eq, Ord)
 
 instance Show Box where
   show (Box o i) = o : show i
 
-infixr 4 :@:
+-- infixr 4 :@:
 
-data Question a = Atom !a | !a :@: !(Question a)
-  deriving (Ord, Eq, Functor, Foldable, Traversable)
+-- data Question a = Atom !a | !a :@: !(Question a)
+--   deriving (Ord, Eq, Functor, Foldable, Traversable)
+
+newtype Question a = Question [a] deriving (Functor, Foldable)
+
+atomicQ :: a -> Question a
+atomicQ = Question . (:[])
+
+-- question :: Ord a => [a] -> Question a
+-- question = Question . sort
+
+nullQ :: Question a
+nullQ = Question []
+
+-- instance Show a => Show (Question a) where
+--   show (Atom a) = show a
+--   show (a :@: b) = show a ++ "+" ++ show b
 
 instance Show a => Show (Question a) where
-  show (Atom a) = show a
-  show (a :@: b) = show a ++ "+" ++ show b
+  show (Question []) = "NULL"
+  show (Question a) = intercalate "+" . map show $ a
+
+-- instance Functor Question where
+--   fmap f (Question a) = Question $ fmap f a
+
+instance Applicative Question where
+  pure = Question . (:[])
+  (Question a) <*> (Question b) = Question $ a <*> b
+
+-- (.@.) :: Ord a => Question a -> Question a -> Question a
+-- (Atom a) .@. (Atom b)        | a <= b    = a :@: Atom  b
+--                              | otherwise = b :@: Atom a
+-- (Atom a) .@. p@(b :@: c)     | a <= b    = a :@: p
+--                              | otherwise = b :@: (Atom a .@. c)
+-- (a :@: b) .@. p = Atom a .@. b .@. p
 
 (.@.) :: Ord a => Question a -> Question a -> Question a
-(Atom a) .@. (Atom b)        | a <= b    = a :@: Atom  b
-                             | otherwise = b :@: Atom a
-(Atom a) .@. p@(b :@: c)     | a <= b    = a :@: p
-                             | otherwise = b :@: (Atom a .@. c)
-(a :@: b) .@. p = Atom a .@. b .@. p
+(Question a) .@. (Question b) = Question . sort $ a ++ b
 
 infixr 5 .@.
 
@@ -57,7 +230,8 @@ boxQs = concatMap boxes . sequenceA
 
 -- |All atomic propositions on a three box system
 boxAtoms :: System s => BoxModel s -> [Question (s Box)]
-boxAtoms = map Atom . boxQs
+-- boxAtoms = map Atom . boxQs
+boxAtoms = map pure . boxQs
 
 x :: Observable
 x = Observable 'X' [0, 1]
@@ -99,19 +273,13 @@ instance Splitting Three Two where
   split (Three (a, b, c)) = (One a, Two (b, c))
   combine (One a, Two (b, c)) = Three (a, b, c)
 
-combineQ :: (Ord (s Box), Splitting s s') =>
-            Question (One Box) -> Question (s' Box) -> Question (s Box)
-combineQ (Atom a) (Atom b) = Atom $ combine (a, b)
-combineQ a@(Atom _) q = foldl1 (.@.) $ fmap (combineQ a . Atom) q
-combineQ (a :@: as) q = combineQ (Atom a) q .@. combineQ as q
-
 nonsignaling' :: (Ord (s Box), Splitting s s') =>
                  BoxModel s -> [(Question (s Box), Question (s Box))]
 nonsignaling' model = combineNS <$> pairs a <*> rest
   where
-    (a, rest) = map sumUp . idDecompositions *** boxAtoms $ split model
-    sumUp = foldl1' (.@.) . map Atom
+    (a, rest) = map Question . idDecompositions *** boxAtoms $ split model
     combineNS (l, r) q = (combineQ l q, combineQ r q)
+    combineQ p q = curry combine <$> p <*> q
 
 nonsignaling :: (Ord (s Box), Splitting s s') =>
                 BoxModel s -> [(Question (s Box), Question (s Box))]
@@ -123,8 +291,9 @@ nonsignaling model = concatMap ns $ zip unshifts shifts
 -- Linear programming tools
 --
 toLinearFunc :: (Ord (s Box), System s) => Question (s Box) -> LinFunc (s Box) Int
-toLinearFunc (Atom a) = var a
-toLinearFunc (a :@: b) = var a ^+^ toLinearFunc b
+toLinearFunc (Question a) = varSum a
+-- toLinearFunc (Atom a) = var a
+-- toLinearFunc (a :@: b) = var a ^+^ toLinearFunc b
 
 normalizationC :: (Ord (s Box), System s) => BoxModel s -> [LinFunc (s Box) Int]
 normalizationC = map varSum . idDecompositions
@@ -211,8 +380,6 @@ allBoxModelQuestions' c (a:as) = a:sums ++ allBoxModelQuestions' c as
   where
     sums = map (a .@.) . allBoxModelQuestions' c . filter (summable c a) $ as
 
-
-
 -- boxModelPropositions' _ _ [] = []
 -- boxModelPropositions' c ps pool = undefined
 --   where
@@ -251,6 +418,36 @@ allBoxModelQuestions' c (a:as) = a:sums ++ allBoxModelQuestions' c as
 twoboxes = two [x, y] [x, y]
 
 threeboxes = three [x, y] [x, y] [x, y]
+
+--
+-- Readers
+--
+
+instance (System s, Ord (s Box)) => Read (Question (s Box)) where
+    readsPrec _ = either (const []) id . parseOnly parseQ' . pack
+        where
+            parseQ' = do
+                q <- parseQ
+                rest <- takeByteString
+                return [(q, unpack rest)]
+
+parseQ :: (System s, Ord (s Box)) => Parser (Question (s Box))
+parseQ = do
+    qs <- parseSAQ `sepBy` char '+'
+    return . Question . sort  $ qs
+
+parseSAQ :: (System a) => Parser (a Box)
+parseSAQ = do
+    _ <- char '['
+    q <- sequence $ pure parseAQ
+    _ <- char ']'
+    return q
+
+parseAQ :: Parser Box
+parseAQ =  do
+  a <- letter_ascii
+  alpha <- decimal
+  return $ Box a alpha
 
 --
 -- Helper

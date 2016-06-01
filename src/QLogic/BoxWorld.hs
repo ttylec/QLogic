@@ -11,6 +11,7 @@
 module QLogic.BoxWorld where
 
 import           Data.Maybe
+import Data.List
 import           Prelude                          hiding (and, concat,
                                                    foldl, foldl1, sequence)
 
@@ -27,6 +28,7 @@ import qualified Data.Map.Strict                  as Map
 import           QLogic
 import           QLogic.Concrete
 import           QLogic.States
+import QLogic.GeneralBoxes
 
 import           Data.Attoparsec.ByteString.Char8 hiding (take)
 import           Data.ByteString.Char8            (pack, unpack)
@@ -38,12 +40,6 @@ import           Data.Foldable
 import           Data.Traversable
 
 import           Control.Monad                    (liftM)
-
--- |Represents discrete valued observable, named *name* with domain *domain*.
--- Domain is usually set [0..k], where k is number of distinct outputs.
--- Storing as a list is convenient for question construction.
-data Observable = Observable { name   :: Char
-                             , domain :: [Int] } deriving (Eq, Ord, Show)
 
 -- |Point in the (generalized) phase space.
 -- In classical physics, points of the phase space can be interpreted
@@ -59,139 +55,6 @@ newtype PhaseSpace a = PhaseSpace (Set a) deriving (Eq, Ord, Show)
 -- |Get a list of points
 phasePoints :: PhaseSpace a -> [a]
 phasePoints (PhaseSpace a) = Set.toList a
-
--- |We define an alias for data type class that will represent
--- physical systems, single or composed.
---
--- We want to discuss either single or composite systems
--- in typesafe manner. We want to distinguish between
--- number of parties and have some tools to compose single
--- systems into composite systems. It appeared that
--- what we require is that a data type representing physical
--- system is *Traversable* and *Applicative*. Detailed
--- discussion of why can be find in instance declarations.
-class (Traversable s, Applicative s) => System s where
-  shifts   :: [s a -> s a]
-  unshifts :: [s a -> s a]
-
--- |Types representing single system, and composite systems
--- consisting of two and three parties.
---
--- We have simple product structure, parametrized by one
--- type. The type does not distinguish different systems,
--- but type of the property that we discuss.
--- In this work, this is either the phase space point
--- or an elementary question (*Atomic*) about
--- some property.
---
--- The interesting thing is that only the *Applicative*
--- instance cannot be automaticaly derived.
---
--- We derive *Foldable* to be able to call *and* function.
--- For example, by asking a pair of questions p, q on
--- 2-party system we obtain as a result Two Bool type.
--- We want to reduce answer to composite system.
---
--- We derive *Functor*, because we want to transform
--- between considered properties. E.g. for the question
--- on two-party system we want to be able to compute
--- a phase space subset of two-party system.
---
--- *Traversable* instance is required because of
--- > sequenceA :: (Traversable t, Applicative f) => t (f a) -> f (t a)
--- We use it only for lists. For example, having
--- Two [a] we would like to get [Two a].
--- Interpretation is straightforward: having a Two
--- lists of some qualites of components we want to construct
--- a list of qualities for the whole two-party system.
-newtype One a = One a deriving (Eq, Foldable, Functor, Ord, Traversable)
-newtype Two a = Two (a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
-newtype Three a = Three (a, a, a) deriving (Eq, Foldable, Functor, Ord, Traversable)
-
-one :: a -> One a
-one = One
-
-two :: a -> a -> Two a
-two a b = Two (a, b)
-
-three :: a -> a -> a -> Three a
-three a b c = Three (a, b, c)
-
-instance System One where
-  shifts   = [id]
-  unshifts = [id]
-
-instance System Two where
-  shifts   = [id, \ (Two (a, b)) -> Two (b, a)]
-  unshifts = [id, \ (Two (a, b)) -> Two (b, a)]
-
-instance System Three where
-  shifts = [ id, shift, shift . shift ]
-    where
-      shift (Three (a, b, c)) = Three (c, a, b)
-  unshifts = [ id, shift, shift . shift ]
-    where
-      shift (Three (a, b, c)) = Three (b, c, a)
-
--- |Applicative for single system is trivial,
--- and it seems that the only possible.
-instance Applicative One where
-    pure = One
-    (One f) <*> (One a) = One $ f a
-
--- Check laws:
--- identity:
--- > pure id <*> One v = One id <*> One v = One $ id v = One v -- OK
--- composition:
--- > pure (.) <*> One u <*> One v <*> One w = One (.) <*> One u <*> One v <*> One w
--- > = One ( (.) u ) <*> One v <*> One w = One ( u . v ) <*> One w = One (u . v $ w)
--- on the other hand:
--- > One u <*> (One v <*> One w) = One u <*> One (v w) = One $ u (v w) -- OK
--- homomorphism
--- > pure f <*> pure x = One f <*> One x = One $ f x = pure $ f x -- OK
--- interchange:
--- > One u <*> pure y = One $ u y
--- > pure ($ y) <*> One u = One ($ y) <*> One u = One (($ y) u) = One (u $ y) -- OK
-
--- |Applicative instance for two-party system is straightforward:
--- we have simple product structure.
-instance Applicative Two where
-    pure a = Two (a, a)
-    (Two (f, g)) <*> (Two (a, b)) = Two (f a, g b)
-
--- Check laws:
--- identity:
--- > pure id <*> Two (v, w) = Two (id, id) <*> Two (v, w) = Two $ (id v, id w) = Two (v, w) -- OK
--- composition:
--- > pure (.) <*> Two (u, u') <*> Two (v, v') <*> Two (w, w')
--- > = Two ((.), (.)) <*> Two (u, u') <*> Two (v, v') <*> Two (w, w')
--- > = Two ( (.) u, (.) u' ) <*>  Two (v, v') <*> Two (w, w')
--- > = Two ( u . v, u . v' ) <*> Two (w, w') = Two (u . v $ w, u' . v' $ w')
--- on the other hand:
--- > Two (u, u') <*> (Two (v, v') <*> Two (w, w'))
--- > = Two (u, u') <*> Two (v w, v' w) = Two (u (v w), u' (v' w')) -- OK
--- homomorphism
--- > pure f <*> pure x = Two (f, f) <*> Two (x, x) = Two (f x, f x) = pure $ f x -- OK
--- interchange:
--- > Two (u, v) <*> pure y = Two (u y, v y)
--- > pure ($ y) <*> Two (u, v) = Two ($ y, $ y) <*> Two (u, v)
--- > = Two (($ y) u, ($ y) v) = Two (u $ y, v $ y) -- OK
-
--- |Analogously we define instance for three-party system.
-instance Applicative Three where
-    pure a = Three (a, a, a)
-    (Three (f, g, h)) <*> (Three (a, b, c)) = Three (f a, g b, h c)
-
--- |Helper function. Like *sequenceA* for *One*, *Two*, etc. is used
--- only for lists here.
--- This function specialize to
--- > combineWith :: ([b] -> [c]) -> a [b] -> a [c].
--- This simply applies some function that transforms list of properties
--- and then we construct list for composite system from
--- lists for components.
--- TODO improve this documentation.
-combineWith :: (Traversable a, Applicative f) => (b -> f c) -> a b -> f (a c)
-combineWith f = sequenceA . fmap f
 
 -- |Build a phase space of a classical system, given the list of observables.
 --
@@ -214,68 +77,48 @@ phaseSpace1' obs = map (Point . Map.fromList) $ tups [[(name o, k) | k <- domain
         tups [v] = map (:[]) v
         tups (v:vs) = [p:ps | p <- v, ps <- tups vs]
 
-data Atomic = Atomic Char Int | Null | Trivial deriving (Eq, Ord)
-data Question a = Question a | OPlus (Question a) (Question a) deriving (Eq, Ord)
+-- data Atomic = Atomic Char Int | Null | Trivial deriving (Eq, Ord)
+-- data Question a = Question a | OPlus (Question a) (Question a) deriving (Eq, Ord)
 
-instance Show Atomic where
-    show Trivial = "One"
-    show Null    = "Null"
-    show (Atomic a alpha) = a:show alpha
+-- instance Show Atomic where
+--     show Trivial = "One"
+--     show Null    = "Null"
+--     show (Atomic a alpha) = a:show alpha
 
-instance (Show a) => Show (Question a) where
-   show (Question a) = show a
-   show (OPlus a b) = show a ++ "+" ++ show b
+-- instance (Show a) => Show (Question a) where
+--    show (Question a) = show a
+--    show (OPlus a b) = show a ++ "+" ++ show b
 
-infixl 4 <+>
-(<+>) = OPlus
+-- infixl 4 <+>
+-- (<+>) = OPlus
 
-instance (Show a) => Show (One a) where
-    show (One a) = "[" ++ show a ++ "]"
+askBox :: System s => s Box -> s Point -> Bool
+askBox b point = and $ liftA2 askBox1 b point
+  where
+    askBox1 (Box a alpha) (Point p) = maybe False (== alpha) $ Map.lookup a p
 
-instance (Show a) => Show (Two a) where
-    show (Two (a, b)) = "[" ++ show a ++ show b ++ "]"
+askQ :: System s => Question (s Box) -> s Point -> Bool
+askQ q point = or $ fmap (`askBox` point) q
 
-instance (Show a) => Show (Three a) where
-    show (Three (a, b, c)) = "[" ++ show a ++ show b ++ show c ++ "]"
+phaseSubset :: System s => PhaseSpace (s Point) -> Question (s Box) -> Set (s Point)
+phaseSubset (PhaseSpace points) q = Set.filter (askQ q) points
 
-askAtomicOne :: Atomic -> Point -> Bool
-askAtomicOne (Atomic a alpha) (Point p) = case Map.lookup a p of
-    Just x  -> x == alpha
-    Nothing -> False
-askAtomicOne Null _    = False
-askAtomicOne Trivial _ = True
-
-askQA :: (Foldable a, Applicative a) => Question (a Atomic) -> a Point -> Bool
-askQA (Question a) p = and $ liftA2 askAtomicOne a p
-askQA (OPlus a b) p  = askQA a p || askQA b p
-
-atomicQuestionsOf :: Observable -> [Atomic]
-atomicQuestionsOf obs = map (Atomic $ name obs) $ domain obs
-
-phaseSubset :: (System a) => PhaseSpace (a Point) -> Question (a Atomic) -> Set (a Point)
-phaseSubset (PhaseSpace points) q = Set.filter (askQA q) points
-
-boxWorldAtomicQs :: (System a) => a [Observable] -> [Question (a Atomic)]
-boxWorldAtomicQs obs = map Question . combineWith atomsOf $ obs
-    where
-        atomsOf = concat . map atomicQuestionsOf
-
-boxWorldLogic :: (System c, Ord (c Point))
-              => c [Observable]
-              -> Representation ConcreteInt IntSet (Question (c Atomic))
+boxWorldLogic :: (System s, Ord (s Point), Ord (s Box))
+              => BoxModel s
+              -> Representation ConcreteInt IntSet (Question (s Box))
 boxWorldLogic obs = Representation q2set set2q ql
   where
     ql        = concreteIntSublogic (booleanAlgebraInt space) (map q2set atomicQs)
     phase     = phaseSpace obs
-    atomicQs  = boxWorldAtomicQs obs
+    atomicQs  = boxAtoms obs
     phasePack = packList . phasePoints $ phase
     packSet   = IS.fromList . map (toKey phasePack) . Set.toList
     space     = IS.fromList [0..length atomicQs - 1]
     q2set     = packSet . phaseSubset phase
     invAtoms  = rightInvMap atomicQs q2set
     set2q q
-        | IS.null q = Question . pure $ Null
-        | otherwise = foldl1 (<+>) . map (\a -> fromJust $ Map.lookup a invAtoms) . decomp $ q
+        | IS.null q = nullQ
+        | otherwise = foldl1' (.@.) . map (\a -> fromJust $ Map.lookup a invAtoms) . decomp $ q
             where
                 decomp = head . atomicDecomposition ql
 
@@ -294,8 +137,8 @@ data Representation p a b  = Representation { toRepr    :: b -> a
 instance (POrdStruct p a) => POrdStruct (Representation p a b) b where
     elementsOf ql = map (fromRepr ql) . elementsOf . logicRepr $ ql
     lessIn        = liftRepr2 lessIn
-    supIn ql a b  = liftM (fromRepr ql) $ liftRepr2 supIn ql a b
-    infIn ql a b  = liftM (fromRepr ql) $ liftRepr2 infIn ql a b
+    supIn ql a b  = fromRepr ql <$> liftRepr2 supIn ql a b
+    infIn ql a b  = fromRepr ql <$> liftRepr2 infIn ql a b
 
 instance (Eq b, QLogicStruct p a) => QLogicStruct (Representation p a b) b where
     ocmplIn  = liftRepr ocmplIn
@@ -331,50 +174,11 @@ twoValuedStates ql = filter (isStateII' ql) . map (fromAtomicList ql . zip atoms
 
 -- Printers and readers
 
-instance Read Atomic where
-    readsPrec _ = either (const []) id . parseOnly parseAtomic . pack
-        where
-            parseAtomic = do
-                p <- parseAQ
-                rest <- takeByteString
-                return [(p, unpack rest)]
 
-parseAQ :: Parser Atomic
-parseAQ = (string "Null" >> return Null) <|> 
-          (string "One" >> return Trivial) <|> 
-          parseAtomic
-    where
-        parseAtomic = do
-            a <- letter_ascii
-            alpha <- decimal
-            return $ Atomic a alpha
-
-parseSAQ :: (System a) => Parser (a Atomic)
-parseSAQ = do
-    char '['
-    q <- sequence $ pure parseAQ
-    char ']'
-    return q
-
-instance (System a) => Read (Question (a Atomic)) where
-    readsPrec p = either (const []) id . parseOnly parseQ' . pack
-        where
-            parseQ' = do
-                q <- parseQ
-                rest <- takeByteString
-                return [(q, unpack rest)]
-
-parseQ :: (System a) => Parser (Question (a Atomic))
-parseQ = do
-    -- char '['
-    qs <- parseSAQ `sepBy` (char '+') 
-    -- char ']'
-    return . foldl1' (<+>) . map Question $ qs
-
-parsePRState :: System a => Parser [(Question (a Atomic), Double)]
+parsePRState :: (System s, Ord (s Box)) => Parser [(Question (s Box), Double)]
 parsePRState = parseValue `sepBy1` (char ',' >> skipSpace) 
     where
-        parseValue = do 
+        parseValue = do
             q <- parseQ
             char '='
             v <- double
