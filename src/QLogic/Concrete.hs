@@ -3,7 +3,9 @@
 module QLogic.Concrete
        ( Concrete(..)
        , ConcreteInt(..)
+       , booleanAlgebra
        , booleanAlgebraInt
+       , concreteSublogic
        , concreteIntSublogic
        ) where
 
@@ -36,15 +38,15 @@ instance (Ord a) => QLogicStruct (Concrete a) (Set a) where
     oneOf (Concrete space _) = space
 
 instance (Ord a, Show a) => Show (Concrete a) where
-        show poset = "No. of elements: " ++ (show $ length $ elementsOf poset) ++
-                     "\nGreater than lists:\n" ++ (unlines gtlists)
+        show poset = "No. of elements: " ++ (show . length $ elementsOf poset) ++
+                     "\nGreater than lists:\n" ++ unlines gtlists
             where
                 gtlists = map (\a -> show a ++ "| " ++ show (geEqThan poset a)) $ elementsOf poset
 
 data ConcreteInt = ConcreteInt IntSet [IntSet]
 
 instance POrdStruct ConcreteInt IntSet where
-    elementsOf (ConcreteInt space els) = els
+    elementsOf (ConcreteInt _ els) = els
     lessIn _  = IntSet.isSubsetOf
     supIn poset a b
         | IntSet.intersection a b == IntSet.empty = Just $ IntSet.union a b
@@ -62,6 +64,12 @@ instance QLogicStruct ConcreteInt IntSet where
 
 concreteIntSublogic :: ConcreteInt -> [IntSet] -> ConcreteInt
 concreteIntSublogic ql = ConcreteInt (oneOf ql) . ordNub . subLogicElems ql
+
+concreteSublogic :: Ord a => Concrete a -> [Set a] -> Concrete a
+concreteSublogic ql = Concrete (oneOf ql) . ordNub . subLogicElems ql
+
+booleanAlgebra :: Ord a => Set a -> Concrete a
+booleanAlgebra space = Concrete space (map Set.fromList . subsets . Set.elems $ space)
 
 booleanAlgebraInt :: IntSet -> ConcreteInt
 booleanAlgebraInt space = ConcreteInt space (map IntSet.fromList . subsets . IntSet.elems $ space)

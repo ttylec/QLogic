@@ -10,36 +10,30 @@
 
 module QLogic.BoxWorld where
 
-import           Data.Maybe
+import Data.Maybe
 import Data.List
-import           Prelude                          hiding (and, concat,
-                                                   foldl, foldl1, sequence)
+import Prelude hiding (and, concat
+                      , foldl, foldl1, sequence)
 
-import           Data.List (foldl1')
-import           Data.IntSet                      (IntSet)
-import qualified Data.IntSet                      as IS
-import           Data.Set                         (Set)
-import qualified Data.Set                         as Set
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IS
+import Data.Set (Set)
+import qualified Data.Set as Set
 
-import           Data.Map.Strict                  (Map)
-import qualified Data.Map.Strict                  as Map
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
 -- import Data.Poset.ConcretePoset
-import           QLogic
-import           QLogic.Concrete
-import           QLogic.States
+import QLogic
+import QLogic.Concrete
+import QLogic.States
 import QLogic.GeneralBoxes
 
-import           Data.Attoparsec.ByteString.Char8 hiding (take)
-import           Data.ByteString.Char8            (pack, unpack)
+import Data.Attoparsec.ByteString.Char8 hiding (take, space)
 
-import           QLogic.Utils
+import QLogic.Utils
 
-import           Control.Applicative
-import           Data.Foldable
-import           Data.Traversable
-
-import           Control.Monad                    (liftM)
+import Control.Applicative
 
 -- |Point in the (generalized) phase space.
 -- In classical physics, points of the phase space can be interpreted
@@ -47,7 +41,10 @@ import           Control.Monad                    (liftM)
 -- exactly outcomes of observables of the classical system.
 -- Here we use this interpretation encode points as a *Map* from *Char*
 -- (symbol denoting observable) to *Int* (value of that observable).
-newtype Point = Point (Map Char Int) deriving (Eq, Ord, Show)
+newtype Point = Point (Map Char Int) deriving (Eq, Ord)
+
+instance Show Point where
+  show (Point p) = concatMap (\(k, v) -> show k ++ show v) . Map.toList $ p
 
 -- |Phase space is simply a set of points.
 newtype PhaseSpace a = PhaseSpace (Set a) deriving (Eq, Ord, Show)
@@ -77,21 +74,6 @@ phaseSpace1' obs = map (Point . Map.fromList) $ tups [[(name o, k) | k <- domain
         tups [v] = map (:[]) v
         tups (v:vs) = [p:ps | p <- v, ps <- tups vs]
 
--- data Atomic = Atomic Char Int | Null | Trivial deriving (Eq, Ord)
--- data Question a = Question a | OPlus (Question a) (Question a) deriving (Eq, Ord)
-
--- instance Show Atomic where
---     show Trivial = "One"
---     show Null    = "Null"
---     show (Atomic a alpha) = a:show alpha
-
--- instance (Show a) => Show (Question a) where
---    show (Question a) = show a
---    show (OPlus a b) = show a ++ "+" ++ show b
-
--- infixl 4 <+>
--- (<+>) = OPlus
-
 askBox :: System s => s Box -> s Point -> Bool
 askBox b point = and $ liftA2 askBox1 b point
   where
@@ -118,9 +100,38 @@ boxWorldLogic obs = Representation q2set set2q ql
     invAtoms  = rightInvMap atomicQs q2set
     set2q q
         | IS.null q = nullQ
-        | otherwise = foldl1' (.@.) . map (\a -> fromJust $ Map.lookup a invAtoms) . decomp $ q
+        | otherwise = collapse . sequenceA . map (invAtoms Map.!) . decompose ql $ q
             where
-                decomp = head . atomicDecomposition ql
+              collapse (Question as) = Question . concat $ as
+
+boxWorldLogic' :: (System s, Ord (s Point), Ord (s Box))
+              => BoxModel s
+              -> Representation (Concrete (s Point)) (Set (s Point)) (Question (s Box))
+boxWorldLogic' obs = Representation q2set set2q ql
+  where
+    ql        = concreteSublogic (booleanAlgebra ps) (map q2set atomicQs)
+    phase@(PhaseSpace ps)= phaseSpace obs
+    atomicQs  = boxAtoms obs
+    q2set     = phaseSubset phase
+    invAtoms  = rightInvMap atomicQs q2set
+    set2q q
+        | Set.null q = nullQ
+        | otherwise = collapse . sequenceA . map (invAtoms Map.!) . decompose ql $ q
+            where
+              collapse (Question as) = Question . concat $ as
+
+-- TODO: move to QLogic and replace/complement atomicDecompositions
+decompose :: (QLogicStruct p a) => p -> a -> [a]
+decompose ql q = decompose' ql [] q (atomsOf ql)
+
+decompose' :: (QLogicStruct p a) => p -> [a] -> a -> [a] -> [a]
+decompose' _ !accum _ [] = accum
+decompose' ql !accum q (a:as)
+  | a .<=. q  = decompose' ql (a:accum) q $ filter (`ortho` a) as
+  | otherwise = decompose' ql accum q as
+    where
+      (.<=.) = lessIn ql
+      ortho = orthoIn ql
 
 rightInvMap :: (Ord b) => [a] -> (a -> b) -> Map b a
 rightInvMap dom f = foldl' go Map.empty dom
@@ -150,11 +161,14 @@ instance (Eq b, QLogicStruct p a) => QLogicStruct (Representation p a b) b where
     --     where
     --         sublogic = subLogic (logicRepr iso) $ map (toRepr iso) els
 
+cartesian :: (Ord a, Ord (s a), System s) => s (Set a) -> Set (s a)
+cartesian = Set.fromList . sequenceA . fmap Set.toList
+
 -- I kinf of don't understand that.
 --
 -- stateRepr :: Representation p a b -> State b f -> State a f
--- stateRepr r (State s) = State $ \q -> s . fromRepr $ q 
--- 
+-- stateRepr r (State s) = State $ \q -> s . fromRepr $ q
+--
 -- But if we map atoms when we create the state,
 -- then it is much more efficient (fromRepr is expensive)
 --
@@ -176,7 +190,7 @@ twoValuedStates ql = filter (isStateII' ql) . map (fromAtomicList ql . zip atoms
 
 
 parsePRState :: (System s, Ord (s Box)) => Parser [(Question (s Box), Double)]
-parsePRState = parseValue `sepBy1` (char ',' >> skipSpace) 
+parsePRState = parseValue `sepBy1` (char ',' >> skipSpace)
     where
         parseValue = do
             q <- parseQ

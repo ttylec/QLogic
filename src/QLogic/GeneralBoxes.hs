@@ -11,7 +11,7 @@ import Data.Tuple
 import Data.Maybe
 import qualified Data.Map as Map
 
-import Data.LinearProgram hiding (constraints)
+import Data.LinearProgram hiding (constraints, one)
 import System.IO.Unsafe(unsafePerformIO)
 
 import Numeric.LinearAlgebra.Data
@@ -197,9 +197,7 @@ instance Show a => Show (Question a) where
   show (Question []) = "NULL"
   show (Question a) = intercalate "+" . map show $ a
 
--- instance Functor Question where
---   fmap f (Question a) = Question $ fmap f a
-
+-- TODO check laws
 instance Applicative Question where
   pure = Question . (:[])
   (Question a) <*> (Question b) = Question $ a <*> b
@@ -414,6 +412,8 @@ allBoxModelQuestions' c (a:as) = a:sums ++ allBoxModelQuestions' c as
 --
 -- Models
 --
+
+onebox = one [x, y]
 
 twoboxes = two [x, y] [x, y]
 
