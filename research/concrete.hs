@@ -25,7 +25,7 @@ main = do
         b = elementsOf ql !! 56
         seta = q2set a
         seto = oneOf logic
-    
+
     putStrLn $ show . length $ elementsOf ql
     -- print $ set2q a
     -- print $ set2q b

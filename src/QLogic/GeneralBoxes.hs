@@ -178,7 +178,7 @@ instance Show Box where
 -- data Question a = Atom !a | !a :@: !(Question a)
 --   deriving (Ord, Eq, Functor, Foldable, Traversable)
 
-newtype Question a = Question [a] deriving (Functor, Foldable)
+newtype Question a = Question [a] deriving (Eq, Ord, Functor, Foldable)
 
 atomicQ :: a -> Question a
 atomicQ = Question . (:[])

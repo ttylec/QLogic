@@ -7,6 +7,7 @@ module QLogic.Concrete
        , booleanAlgebraInt
        , concreteSublogic
        , concreteIntSublogic
+       , concreteIntSublogic'
        ) where
 
 import Data.Set (Set)
@@ -64,6 +65,45 @@ instance QLogicStruct ConcreteInt IntSet where
 
 concreteIntSublogic :: ConcreteInt -> [IntSet] -> ConcreteInt
 concreteIntSublogic ql = ConcreteInt (oneOf ql) . ordNub . subLogicElems ql
+-- concreteIntSublogic (ConcreteInt space _) =
+--   ConcreteInt space . ordNub . Set.toList . generateIntSublogic space . Set.fromList
+
+concreteIntSublogic' :: ConcreteInt -> [IntSet] -> ConcreteInt
+concreteIntSublogic' ql = ConcreteInt (oneOf ql) . ordNub . generateAtomicSubLogic ql
+
+generateAtomicSubLogic :: (QLogicStruct p a, Ord a) => p -> [a] -> [a]
+generateAtomicSubLogic ql atoms =
+  Set.toList . generateAtomicSubLogic' ql atoms . Set.fromList $ atoms
+
+generateAtomicSubLogic' :: (QLogicStruct p a, Ord a) => p -> [a] -> Set a -> Set a
+generateAtomicSubLogic' ql atoms accum
+  | Set.size accum == Set.size next = accum
+  | otherwise = generateAtomicSubLogic' ql atoms next
+  where
+    next = accum `Set.union` complements `Set.union` sums
+    complements = Set.map (ocmplIn ql) accum
+    sums = Set.fromList . sums' . Set.toList $ accum
+    sums' [] = []
+    sums' (a:as) = go as ++ sums' as
+      where
+        go = filter (not . null . decomposeInto ql atoms . ocmplIn ql)
+             . map (a \/) . filter (`ortho` a)
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
+generateIntSublogic :: IntSet -> Set IntSet -> Set IntSet
+generateIntSublogic space accum
+  | Set.size accum == Set.size next = accum
+  | otherwise = generateIntSublogic space next
+  where
+    next = accum `Set.union` complements `Set.union`
+           (Set.fromList . sums . Set.toList $ accum)
+    complements = Set.map (space `IntSet.difference`) accum
+    sums [] = []
+    sums (a:as) = sums' as ++ sums as
+      where
+        sums' = map (a `IntSet.union`) .
+                     filter (IntSet.null . (a `IntSet.intersection`))
 
 concreteSublogic :: Ord a => Concrete a -> [Set a] -> Concrete a
 concreteSublogic ql = Concrete (oneOf ql) . ordNub . subLogicElems ql
@@ -79,6 +119,16 @@ subLogicElems :: (QLogicStruct p a) => p -> [a] -> [a]
 subLogicElems ql [] = [zeroOf ql]
 subLogicElems ql (a:as) = subLogicElems ql as ++ map (a \/) (subLogicElems ql disj)
     where
+        (\/) = unsafeSupIn ql
+        disj = filter (orthoIn ql a) as
+
+atomicSubLogicElems :: (QLogicStruct p a) => p -> [a] -> [a] -> [a]
+atomicSubLogicElems ql atoms [] = [zeroOf ql]
+atomicSubLogicElems ql atoms (a:as) =
+  subLogicElems ql as ++
+  (filter goodone . map (a \/) $ subLogicElems ql disj)
+    where
+        goodone = not . null . decomposeInto ql atoms . ocmplIn ql
         (\/) = unsafeSupIn ql
         disj = filter (orthoIn ql a) as
 

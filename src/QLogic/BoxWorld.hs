@@ -120,19 +120,6 @@ boxWorldLogic' obs = Representation q2set set2q ql
             where
               collapse (Question as) = Question . concat $ as
 
--- TODO: move to QLogic and replace/complement atomicDecompositions
-decompose :: (QLogicStruct p a) => p -> a -> [a]
-decompose ql q = decompose' ql [] q (atomsOf ql)
-
-decompose' :: (QLogicStruct p a) => p -> [a] -> a -> [a] -> [a]
-decompose' _ !accum _ [] = accum
-decompose' ql !accum q (a:as)
-  | a .<=. q  = decompose' ql (a:accum) q $ filter (`ortho` a) as
-  | otherwise = decompose' ql accum q as
-    where
-      (.<=.) = lessIn ql
-      ortho = orthoIn ql
-
 rightInvMap :: (Ord b) => [a] -> (a -> b) -> Map b a
 rightInvMap dom f = foldl' go Map.empty dom
     where
@@ -164,6 +151,33 @@ instance (Eq b, QLogicStruct p a) => QLogicStruct (Representation p a b) b where
 cartesian :: (Ord a, Ord (s a), System s) => s (Set a) -> Set (s a)
 cartesian = Set.fromList . sequenceA . fmap Set.toList
 
+proj1 :: (System s, System s', Splitting s s', Ord (s a), Ord (s' a), Ord a)
+         => Set (s a) -> Set (One a)
+proj1 = Set.map (fst . split)
+
+projs :: (System s, System s', Splitting s s', Ord (s a), Ord (s' a), Ord a)
+         => Set (s a) -> [Set (One a)]
+projs r = map (\s -> proj1 $ Set.map s r) shifts
+
+stronglyDisjoint1 :: (System s, System s', Splitting s s', Ord (s a), Ord (s' a), Ord a)
+                  => Set (s a) -> Set (s a) -> Bool
+stronglyDisjoint1 p q = disj a b || disj ar br
+  where
+    disj sa sb = Set.null (Set.intersection sa sb)
+    (a, ar) = psplit p
+    (b, br) = psplit q
+    psplit s = (Set.map (fst . split) s, Set.map (snd . split) s)
+
+strongDisjoint :: (System s, System s', Splitting s s', Ord (s a), Ord (s' a), Ord a)
+                  => Set (s a) -> Set (s a) -> Bool
+-- strongDisjoint p q = or $
+--                      zipWith (\a b -> Set.null $ Set.intersection a b)
+--                      (projs p) (projs q)
+strongDisjoint p q = or $ zipWith disj (projs p) (projs q)
+  where
+    disj a b = a `Set.isSubsetOf` b || b `Set.isSubsetOf` a
+               || Set.null (Set.intersection a b)
+
 -- I kinf of don't understand that.
 --
 -- stateRepr :: Representation p a b -> State b f -> State a f
@@ -187,7 +201,6 @@ twoValuedStates ql = filter (isStateII' ql) . map (fromAtomicList ql . zip atoms
         n = length atoms
 
 -- Printers and readers
-
 
 parsePRState :: (System s, Ord (s Box)) => Parser [(Question (s Box), Double)]
 parsePRState = parseValue `sepBy1` (char ',' >> skipSpace)

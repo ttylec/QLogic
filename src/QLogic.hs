@@ -39,7 +39,7 @@ Bibliography:
 -}
 
 {-# LANGUAGE GADTs, MultiParamTypeClasses, FunctionalDependencies,
-             FlexibleInstances #-}
+             FlexibleInstances, BangPatterns #-}
 
 module QLogic (
   -- * Class and basic types
@@ -48,7 +48,8 @@ module QLogic (
     -- * Construction
     , fromPOrdStruct, quotientQLogic, packQLogic, unpackQLogic
     -- * Atoms
-    , atomsOf , atomicDecomposition
+    , atomsOf , atomicDecomposition, decompose
+    , decomposeInto
     -- * Properties of the elements
     , mutuallyDisjointIn, mutuallyCompatibleIn
     -- * Properties of the structure
@@ -310,3 +311,34 @@ atomicDecomposition ql a = filter (sumUpTo a) . subsetsBy (orthoIn ql) . atomsOf
         sumUpTo a (b:bs) = foldl' (\/) b bs === a
         (\/) = unsafeSupIn ql
         (===) = equalIn ql
+
+-- TODO: move to QLogic and replace/complement atomicDecompositions
+decompose :: (QLogicStruct p a) => p -> a -> [a]
+decompose ql q = decompose' ql [] q (atomsOf ql)
+
+decompose' :: (QLogicStruct p a) => p -> [a] -> a -> [a] -> [a]
+decompose' _ !accum _ [] = accum
+decompose' ql !accum q (a:as)
+  | a .<=. q  = decompose' ql (a:accum) q $ filter (`ortho` a) as
+  | otherwise = decompose' ql accum q as
+    where
+      (.<=.) = lessIn ql
+      ortho = orthoIn ql
+
+decomposeInto :: (QLogicStruct p a) => p -> [a] -> a -> Maybe [a]
+decomposeInto ql atoms q = decomposeInto' ql [] q atoms
+
+-- decomposeInto' :: (QLogicStruct p a) => p -> [a] -> a -> [a]
+decomposeInto' ql !accum q []
+  | equalIn ql (sup accum) q = Just accum
+  | otherwise = Nothing
+  where
+    sup [] = zeroOf ql
+    sup as = foldl1' (\/) accum
+    (\/) = unsafeSupIn ql
+decomposeInto' ql !accum q (a:as)
+  | a .<=. q  = decomposeInto' ql (a:accum) q $ filter (`ortho` a) as
+  | otherwise = decomposeInto' ql accum q as
+    where
+      (.<=.) = lessIn ql
+      ortho = orthoIn ql
