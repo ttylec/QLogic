@@ -31,9 +31,9 @@ import qualified Data.Map.Strict as Map
 import QLogic.Utils
 
 -- | Represent partial order relation.
--- Relation can be given either as: 
+-- Relation can be given either as:
 --  * a function,
---  * a list of elements that are in relation 
+--  * a list of elements that are in relation
 --    for any given element,
 --  * a matrix with boolean entries.
 --
@@ -43,14 +43,14 @@ import QLogic.Utils
 data Relation a where
         Function :: (a -> a -> Bool) -> Relation a
         ListRel  :: Ord a => Map a [a] -> Relation a
-        ArrayRel :: Array U DIM2 Bool -> Relation Int 
+        ArrayRel :: Array U DIM2 Bool -> Relation Int
 
 -- | Convert relation to array representation.
 packRelation :: (Ord a) => Packed a -> Relation a -> Relation Int
 packRelation packed rel = ArrayRel $ runIdentity $ computeUnboxedP (fromFunction (Z:.n:.n) isLess)
     where
         isLess (Z:.i:.j) = packFunc2 packed (inRelation rel) i j
-        n = length $ packedElements packed 
+        n = length $ packedElements packed
 
 -- |Convert relation to list representation.
 sparseRelation :: (Ord a) => [a] -> Relation a -> Relation a
@@ -76,7 +76,7 @@ inRelation (ArrayRel rel) = \i j -> rel ! (Z:.i:.j)
 inListRelation :: (Ord k, Eq a) => Map k [a] -> k -> a -> Bool
 inListRelation rel = \a b -> case Map.lookup a rel of
                                  Nothing -> False
-                                 Just x -> b `elem` x 
+                                 Just x -> b `elem` x
 
 -- * Properties of relations.
 
@@ -97,7 +97,7 @@ isSymmetric els rel = and [(x `r` y) `implies` (y `r` x) | x <- els, y <- els]
 -- | Tests if the relation is transitive,
 -- i.e. @x `rel` y@ and @y `rel` z@ implies @x `rel` z@.
 isTransitive :: (Eq a) => [a] -> Relation a -> Bool
-isTransitive els rel = and [(x `r` y && y `r` z) `implies` (x `r` z) | 
+isTransitive els rel = and [(x `r` y && y `r` z) `implies` (x `r` z) |
                            x <- els, y <- els, z <- els]
     where
         r = inRelation rel
@@ -115,7 +115,7 @@ isReflexive els rel = and [x `r` x | x <- els]
 -- S. Marlow, Parallel and Concurrent Programming in Haskell
 --
 -- Implemented only for 'ArrayRel' and 'ListRel' constructors.
--- 'Function' is left undefined on purpose: transitive closure 
+-- 'Function' is left undefined on purpose: transitive closure
 -- of 'ArrayRel' is much faster that 'ListRel' but also
 -- need much more memory. So whether the 'Function'
 -- should be converted to 'ArrayRel' or 'ListRel'
@@ -124,7 +124,7 @@ transitiveClosure :: (Eq a, Ord a) => [a] -> Relation a -> Relation a
 transitiveClosure _ (ArrayRel rel) = ArrayRel $ runIdentity $ go rel 0
     where
         Z :. _ :. n = extent rel
-        go !g !k 
+        go !g !k
             | k == n    = return g
             | otherwise = do
                 g' <- computeP (fromFunction (Z:.n:.n) sp)
@@ -138,8 +138,8 @@ transitiveClosure els (ListRel rel) = ListRel $ foldl' update rel els
         -- an instance of NFData...
         -- runPar $ do
         --     m <- Map.traverseWithKey (\a gelist -> spawn (return (transit a gelist))) rel
-        --     traverse get m 
-            where 
+        --     traverse get m
+            where
                   transit a gelist = foldr greater [] els
                       where greater j m | j `elem` gelist = j:m
                                         | inListRelation rel a k && inListRelation rel k j = j:m
