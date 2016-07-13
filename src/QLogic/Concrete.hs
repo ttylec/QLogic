@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE BangPatterns #-}
 module QLogic.Concrete
        ( Concrete(..)
        , ConcreteInt(..)
@@ -44,12 +45,12 @@ instance (Ord a, Show a) => Show (Concrete a) where
             where
                 gtlists = map (\a -> show a ++ "| " ++ show (geEqThan poset a)) $ elementsOf poset
 
-data ConcreteInt = ConcreteInt IntSet [IntSet]
+data ConcreteInt = ConcreteInt !IntSet ![IntSet]
 
 instance POrdStruct ConcreteInt IntSet where
     elementsOf (ConcreteInt _ els) = els
-    lessIn _  = IntSet.isSubsetOf
-    supIn poset a b
+    lessIn _ !a !b = a `IntSet.isSubsetOf` b
+    supIn poset !a !b
         | IntSet.intersection a b == IntSet.empty = Just $ IntSet.union a b
         | length lub == 1 = Just $ head lub
         | otherwise = Nothing
@@ -58,8 +59,8 @@ instance POrdStruct ConcreteInt IntSet where
 
 instance QLogicStruct ConcreteInt IntSet where
     ocmplIn ql      = IntSet.difference (oneOf ql)
-    orthoIn _ a b   = IntSet.null $ IntSet.intersection a b
-    compatIn ql a b = IntSet.intersection a b `elem` elementsOf ql
+    orthoIn _ !a !b   = IntSet.null $ IntSet.intersection a b
+    compatIn ql !a !b = IntSet.intersection a b `elem` elementsOf ql
     zeroOf _ = IntSet.empty
     oneOf (ConcreteInt space _) = space
 
