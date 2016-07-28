@@ -32,7 +32,7 @@ import qualified Data.Vector as V
 -- == Logical operations
 -- We often try to check if some property is satisfied,
 -- what basically means that we need to check if some
--- logical sentence is valid. 
+-- logical sentence is valid.
 --
 -- These functions allows to write such formulas
 -- in more mathematical manner, utilizing commonly
@@ -68,17 +68,18 @@ subsets :: [a] -> [[a]]
 subsets [] = [[]]
 subsets (x:xs) = subsets xs ++ map (x:) (subsets xs)
 
--- | Subsets of a given list, such that elements 
+-- | Subsets of a given list, such that elements
 -- pairwisely satisfy given binary and transitive relation.
--- 
+--
 -- Properties:
 -- > all (mutuallyBy pred) (subsetsBy pred ls) == True
--- 
+--
 -- It's a manual rewrite of:
 -- > subsetsBy pred ls@(x:xs) = filter (mutuallyBy pred) $ subsets ls
 subsetsBy :: (a -> a -> Bool) -> [a] -> [[a]]
 subsetsBy _ [] = [[]]
 subsetsBy pred (x:xs) = subsetsBy pred xs ++ map (x:) (subsetsBy pred $ filter (pred x) xs)
+
 
 -- subsetsBy' :: (a -> a -> Bool) -> [a] -> [[a]]
 -- subsetsBy' pred xs = filter (mutuallyBy pred) $ subsets' xs

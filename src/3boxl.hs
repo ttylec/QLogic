@@ -161,8 +161,10 @@ main = do
 
   print "Elements of logic:"
   print $ length . elementsOf $ boxWorld
+  print $ length . atomsOf $ boxWorld
   print $ length . elementsOf $ boxWorldA
-  print $ length threeBoxElems
+  print $ length . atomsOf $ boxWorldA
+  -- print $ length threeBoxElems
 
   let
     strange = filter ((>1) . maxStateValue constr) . elementsOf $ boxWorldA

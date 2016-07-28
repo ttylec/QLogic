@@ -58,12 +58,15 @@ module QLogic (
     , isSupremum
     , isOrthomodular
     , isDistributive, isAtomistic
+    , generateOML, generateOMP, generateEA
     -- * Posets
     , module QLogic.Poset
     ) where
 
 import Data.List
 import Data.Maybe
+import qualified Data.Set as Set
+import Data.Set (Set)
 
 import Control.Monad
 import Control.Parallel.Strategies
@@ -180,6 +183,65 @@ quotientQLogic ql = QLogic poset equivOcmpl equivMin equivMax
         equivOcmpl = liftFunc els $ ocmplIn ql
         equivMax = fromJust . equivLookup els $ oneOf ql
         equivMin = fromJust . equivLookup els $ zeroOf ql
+
+-- | Generate orthomodular sub-lattice of a given quantum logic
+generateOML :: (QLogicStruct p a, Ord a) => p -> [a] -> [a]
+generateOML ql = Set.toList . fixedSet (generateOML' ql) . Set.fromList
+
+generateOML' :: (QLogicStruct p a, Ord a) => p -> Set a -> Set a
+generateOML' ql accum = accum `Set.union` complements `Set.union` sums
+  where
+    complements = Set.map (ocmplIn ql) accum
+    sums = Set.fromList . sums' . Set.toList $ accum
+    sums' [] = []
+    sums' (a:as) = go as ++ sums' as
+      where
+        go = map (a \/)
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
+-- | Generate orthomodular sub-poset of a given quantum logic
+generateOMP :: (QLogicStruct p a, Ord a) => p -> [a] -> [a]
+generateOMP ql = Set.toList . fixedSet (generateOMP' ql) . Set.fromList
+
+generateOMP' :: (QLogicStruct p a, Ord a) => p -> Set a -> Set a
+generateOMP' ql accum = accum `Set.union` complements `Set.union` sums
+  where
+    complements = Set.map (ocmplIn ql) accum
+    sums = Set.fromList . sums' . Set.toList $ accum
+    sums' [] = []
+    sums' (a:as) = go as ++ sums' as
+      where
+        go = map (a \/) . filter (`ortho` a)
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
+-- | Generate a box sub-effect algebra of a given quantum logic
+-- The difference with the standard approach is that the
+-- orthogonality relation is different: two elements a b are orthogonal
+-- if their orthocomplement decomposes into atoms of the quantum logic 'p'.
+-- TODO add more how I do that.
+generateEA :: (QLogicStruct p a, Ord a) => p -> [a] -> [a]
+generateEA ql qs = Set.toList . fixedSet (generateEA' ql qs) . Set.fromList $ qs
+
+generateEA' :: (QLogicStruct p a, Ord a) => p -> [a] -> Set a -> Set a
+generateEA' ql !atoms !accum = accum `Set.union` complements `Set.union` sums
+  where
+    complements = Set.map (ocmplIn ql) accum
+    sums = Set.fromList . sums' . Set.toList $ accum
+    sums' [] = []
+    sums' !(a:as) = go as ++ sums' as
+      where
+        go !ls = filter (not . null . decomposeInto ql atoms . ocmplIn ql)
+                 . map (a \/) . filter (`ortho` a) $ ls
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
+fixedSet :: (Set a -> Set a) -> Set a -> Set a
+fixedSet f x | Set.size next == Set.size x = x
+             | otherwise = fixedSet f next
+             where
+               next = f x
 
 -- | List of atoms in logic,
 -- i.e. elements covering zero.
@@ -328,7 +390,7 @@ decompose' ql !accum q (a:as)
 decomposeInto :: (QLogicStruct p a) => p -> [a] -> a -> Maybe [a]
 decomposeInto ql atoms q = decomposeInto' ql [] q atoms
 
--- decomposeInto' :: (QLogicStruct p a) => p -> [a] -> a -> [a]
+decomposeInto' :: (QLogicStruct p a) => p -> [a] -> a -> [a] -> Maybe [a]
 decomposeInto' ql !accum q []
   | equalIn ql (sup accum) q = Just accum
   | otherwise = Nothing

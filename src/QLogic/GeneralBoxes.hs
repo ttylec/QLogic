@@ -286,16 +286,22 @@ nonsignaling model = concatMap ns $ zip unshifts shifts
     ns (post, pre) = fmap (fmap post *** fmap post) . nonsignaling' $ pre model
 
 --
--- Linear programming tools
+-- * General state computations
 --
+-- A state on a box model is defined by its values on atomic
+-- propositions. For an arbitrary state, these are the unknown
+-- values.
+
+--
+-- | Applies a general state to a question. Result is a linear function.
 toLinearFunc :: (Ord (s Box), System s) => Question (s Box) -> LinFunc (s Box) Int
 toLinearFunc (Question a) = varSum a
--- toLinearFunc (Atom a) = var a
--- toLinearFunc (a :@: b) = var a ^+^ toLinearFunc b
 
+-- | General state acting on decompositions of identity
 normalizationC :: (Ord (s Box), System s) => BoxModel s -> [LinFunc (s Box) Int]
 normalizationC = map varSum . idDecompositions
 
+-- | No-signaling conditions as pairs of linear functions.
 nonsignalingC :: (Ord (s Box), Splitting s s') =>
                  BoxModel s -> [(LinFunc (s Box) Int, LinFunc (s Box) Int)]
 nonsignalingC = map (toLinearFunc *** toLinearFunc) . nonsignaling
@@ -319,13 +325,12 @@ boxConstraints model = BMC lpc nsrank nsCM bvm
           concatMap Map.assocs $ boxvars
     nsrank = rank . coefficientMatrix bvm $ nsCM
 
-coefficientMatrix :: Ord (s Box) =>
-  Map.Map (s Box) Int -> [LinFunc (s Box) Int] -> Matrix Double
+coefficientMatrix :: Ord a => Map.Map a Int -> [LinFunc a Int] -> Matrix Double
 coefficientMatrix vars = fromRows . map (coefficientVector vars)
 
 -- |Convert LinFunc to hmatrix Vector.
 -- vars is a monotonic Map from all vars appearing in LinFunc to Int
-coefficientVector :: Ord (s Box) => Map.Map (s Box) Int -> LinFunc (s Box) Int -> Vector Double
+coefficientVector :: Ord a => Map.Map a Int -> LinFunc a Int -> Vector Double
 coefficientVector vars f = accum (konst 0 n) (+) keyvals
   where
     n = Map.size vars
@@ -377,6 +382,7 @@ allBoxModelQuestions' _ []     = []
 allBoxModelQuestions' c (a:as) = a:sums ++ allBoxModelQuestions' c as
   where
     sums = map (a .@.) . allBoxModelQuestions' c . filter (summable c a) $ as
+
 
 -- boxModelPropositions' _ _ [] = []
 -- boxModelPropositions' c ps pool = undefined
