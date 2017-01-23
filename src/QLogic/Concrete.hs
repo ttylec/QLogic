@@ -9,12 +9,15 @@ module QLogic.Concrete
        , concreteSubOML, concreteIntSubOML
        , concreteSubOMP, concreteIntSubOMP
        , concreteSubEA, concreteIntSubEA
+       , concreteIntSubEApar
        ) where
 
 import Data.Set (Set)
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
+
+import Data.Map (Map)
 
 import QLogic
 import QLogic.Utils
@@ -74,6 +77,9 @@ concreteIntSubOMP ql = ConcreteInt (oneOf ql) . generateOMP ql
 
 concreteIntSubEA :: ConcreteInt -> [IntSet] -> ConcreteInt
 concreteIntSubEA ql = ConcreteInt (oneOf ql) . generateEA ql
+
+concreteIntSubEApar :: ConcreteInt -> [IntSet] -> ConcreteInt
+concreteIntSubEApar ql = ConcreteInt (oneOf ql) . generateEApar ql
 
 concreteSubOML :: Ord a => Concrete a -> [Set a] -> Concrete a
 concreteSubOML ql = Concrete (oneOf ql) . generateOML ql

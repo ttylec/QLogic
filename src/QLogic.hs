@@ -59,6 +59,7 @@ module QLogic (
     , isOrthomodular
     , isDistributive, isAtomistic
     , generateOML, generateOMP, generateEA
+    , generateEApar
     -- * Posets
     , module QLogic.Poset
     ) where
@@ -184,6 +185,8 @@ quotientQLogic ql = QLogic poset equivOcmpl equivMin equivMax
         equivMax = fromJust . equivLookup els $ oneOf ql
         equivMin = fromJust . equivLookup els $ zeroOf ql
 
+
+  
 -- | Generate orthomodular sub-lattice of a given quantum logic
 generateOML :: (QLogicStruct p a, Ord a) => p -> [a] -> [a]
 generateOML ql = Set.toList . fixedSet (generateOML' ql) . Set.fromList
@@ -237,11 +240,54 @@ generateEA' ql !atoms !accum = accum `Set.union` complements `Set.union` sums
     (\/) = unsafeSupIn ql
     ortho = orthoIn ql
 
+generateEApar :: (QLogicStruct p a, Ord a, NFData a) => p -> [a] -> [a]
+-- generateEApar ql qs = Set.toList . fixedSet (generateEApar' ql qs) . Set.fromList $ qs
+generateEApar ql qs = fixedList (generateEApar'' ql qs) qs
+
+generateEApar' :: (QLogicStruct p a, Ord a, NFData a) => p -> [a] -> Set a -> Set a
+generateEApar' ql !atoms !accum = accum `Set.union` complements `Set.union` sums
+  where
+    complements = Set.map (ocmplIn ql) accum
+    sums = Set.fromList . sums' . Set.toList $ accum
+    sums' [] = []
+    sums' !(a:as) = (go as `using` parListChunk 100 rdeepseq) ++ sums' as
+      where
+        go !ls = filter (not . null . decomposeInto ql atoms . ocmplIn ql)
+                 . map (a \/) . filter (`ortho` a) $ ls
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
+generateEApar'' :: (QLogicStruct p a, Ord a, NFData a) => p -> [a] -> [a] -> [a]
+generateEApar'' ql !atoms !accum = rmdups $ accum ++ complements ++ sums accum
+  where
+    complements = map (ocmplIn ql) accum
+    sums [] = []
+    sums !(a:as) = go as ++ sums as
+    -- sums !(a:as) = (go as `using` r0) ++ sums as
+      where
+        go !ls = filter (not . null . decomposeInto ql atoms . ocmplIn ql)
+                 . map (a \/) . filter (`ortho` a) $ ls
+    (\/) = unsafeSupIn ql
+    ortho = orthoIn ql
+
 fixedSet :: (Set a -> Set a) -> Set a -> Set a
 fixedSet f x | Set.size next == Set.size x = x
              | otherwise = fixedSet f next
-             where
-               next = f x
+  where
+    next = f x
+
+fixedList :: ([a] -> [a]) -> [a] -> [a]
+fixedList f x | length next == length x = x
+              | otherwise = fixedList f next
+  where
+    next = f x
+
+rmdups :: Ord a => [a] -> [a]
+rmdups = rmdups' Set.empty where
+  rmdups' _ [] = []
+  rmdups' a (b : c) = if Set.member b a
+    then rmdups' a c
+    else b : rmdups' (Set.insert b a) c
 
 -- | List of atoms in logic,
 -- i.e. elements covering zero.

@@ -6,7 +6,7 @@ name:                qlogic
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Tools for quantum logic
 description:         Provides data structures and function for symbolic manipulation of quantum logic structures.
 homepage:            https://github.com/ttylec/QLogic/
@@ -26,17 +26,10 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  exposed-modules:     QLogic, QLogic.Examples, QLogic.Examples.NonTrivial3
-                       QLogic.Poset, QLogic.Poset.Generic, QLogic.Poset.Examples, 
-                       QLogic.GeneralBoxes
-                       QLogic.Relation, 
-                       QLogic.Poset.ConcretePoset,
-                       QLogic.BoxProduct, 
-                       QLogic.Concrete,
-                       QLogic.States,
-                       QLogic.BoxWorld,
-                       QLogic.IO, QLogic.Utils
- 
+  exposed-modules:     QStructures, QStructures.Concrete, QStructures.Hilbert
+                     , BoxModels, BoxModels.SetRepresentation 
+                     , BoxModels.HilbertRepresentations 
+
   -- Modules included in this library but not exported.
   other-modules:       
   
@@ -54,7 +47,8 @@ library
                        random >= 1.0,
                        attoparsec >= 0.12, bytestring >= 0.10,
                        glpk-hs >= 0.3.5,
-                       hmatrix >= 0.17
+                       hmatrix >= 0.17,
+                       linear >= 1.20
   
   -- Directories containing source files.
   hs-source-dirs:      src/ 
@@ -62,10 +56,10 @@ library
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
-Benchmark packed-qlogic
-    type:               exitcode-stdio-1.0
-    hs-source-dirs:     tests
-    main-is:            packed_benchmark.hs 
-    build-depends:      base, qlogic, criterion
-    ghc-options:        -O2
-    default-language:   Haskell2010
+-- Benchmark packed-qlogic
+--     type:               exitcode-stdio-1.0
+--     hs-source-dirs:     tests
+--     main-is:            packed_benchmark.hs 
+--     build-depends:      base, qlogic, criterion
+--     ghc-options:        -O2
+--     default-language:   Haskell2010

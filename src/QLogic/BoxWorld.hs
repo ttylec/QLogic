@@ -146,6 +146,20 @@ boxWorldPropositions' obs typ = typ (booleanAlgebra ps) (map q2set atomicQs)
     atomicQs  = boxAtoms obs
     q2set     = phaseSubset phase
 
+boxWorldPropositions'' :: (System s, Ord (s Point)) =>
+  BoxModel s -> (ConcreteInt -> [IntSet] -> ConcreteInt)
+  -> Representation ConcreteInt IntSet (Set (s Point))
+boxWorldPropositions'' obs typ = Representation packSet unpackSet clogic
+  where
+    clogic = typ (booleanAlgebraInt space) (map q2intset atomicQs)
+    atomicQs  = boxAtoms obs
+    space     = IS.fromList [0..length atomicQs - 1]
+    q2intset  = packSet . phaseSubset phase
+    packSet   = IS.fromList . map (toKey phasePack) . Set.toList
+    unpackSet = Set.fromList . map (fromKey phasePack) . IS.toList
+    phasePack = packList . phasePoints $ phase
+    phase@(PhaseSpace ps)= phaseSpace obs
+
 rightInvMap :: (Ord b) => [a] -> (a -> b) -> Map b a
 rightInvMap dom f = foldl' go Map.empty dom
     where

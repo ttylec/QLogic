@@ -33,23 +33,23 @@ allStateRestrictionRank ql = rank . coefficientMatrix vars $ restr
 main :: IO ()
 main = do
   let
-    boxes = twoboxes
-    -- boxes = threeboxes
-    ea = boxWorldPropositions boxes concreteIntSubEA
-    ea' = boxWorldPropositions' boxes concreteSubEA
-    omp = boxWorldPropositions boxes concreteIntSubOMP
-    oml = boxWorldPropositions boxes concreteIntSubOML
+    -- boxes = twoboxes
+    boxes = threeboxes
+    ea = boxWorldPropositions'' boxes concreteIntSubEA
+    -- ea' = boxWorldPropositions' boxes concreteSubEA
+    -- omp = boxWorldPropositions boxes concreteIntSubOMP
+    -- oml = boxWorldPropositions boxes concreteIntSubOML
 
   print . length . elementsOf $ ea
   print . length . atomsOf $ ea
-  print . length . elementsOf $ omp
-  print . length . atomsOf $ omp
+  -- print . length . elementsOf $ omp
+  -- print . length . atomsOf $ omp
 
-  let
-    a0 = head . atomsOf $ ea
-    atomsOMP = atomsOf omp
+  -- let
+  --   a0 = head . atomsOf $ ea
+  --   atomsOMP = atomsOf omp
 
-  print $ all (`elem` atomsOMP) . atomsOf $ ea
-  print $ length $ atomicDecomposition omp (oneOf omp)
-  print $ allStateRestrictionRank omp
-  print $ nsrankValue . boxConstraints $ boxes
+  -- print $ all (`elem` atomsOMP) . atomsOf $ ea
+  -- print $ length $ atomicDecomposition omp (oneOf omp)
+  -- print $ allStateRestrictionRank omp
+  -- print $ nsrankValue . boxConstraints $ boxes

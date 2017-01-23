@@ -29,15 +29,25 @@ localizedFirst model q = all (== gamma') . map setFromSnd $ points
     firstEq (a, _) (b, _) = a == b
     setFromSnd = Set.fromList . map snd
 
+localizedOther :: (System s, Ord (s Point), Ord (s' Point), Splitting s s') =>
+  BoxModel s -> Set (s Point) -> Bool
+localizedOther model q = all (== gamma') . map setFromSnd $ points
+  where
+    (PhaseSpace gamma') = phaseSpace . fst . split $ model
+    points = groupBy secondEq . sortBy secondCmp . map split $ Set.toList q
+    secondCmp (_, a) (_, b) = a `compare` b
+    secondEq (_, a) (_, b) = a == b
+    setFromSnd = Set.fromList . map fst
+
 main :: IO ()
 main = do
   let
-    boxes = twoboxes
-    -- boxes = threeboxes
-    ea = boxWorldPropositions boxes concreteIntSubEA
-    ea' = boxWorldPropositions' boxes concreteSubEA
-    omp = boxWorldPropositions boxes concreteIntSubOMP
-    oml = boxWorldPropositions boxes concreteIntSubOML
+    -- boxes = twoboxes
+    boxes = threeboxes
+    ea = boxWorldPropositions'' boxes concreteIntSubEA
+    -- ea' = boxWorldPropositions' boxes concreteSubEA
+    omp = boxWorldPropositions'' boxes concreteIntSubOMP
+    -- oml = boxWorldPropositions boxes concreteIntSubOML
 
   -- print . length . elementsOf $ ea
   -- print . length . atomsOf $ ea
@@ -53,5 +63,12 @@ main = do
   -- print $ allStateRestrictionRank omp
   -- print $ nsrankValue . boxConstraints $ boxes
 
-  print "----"
-  print $ length . filter (localizedFirst boxes) . elementsOf $ ea'
+  putStrLn "Localized propositions in the effect algebra:"
+  print $ length . filter (localizedFirst boxes) . elementsOf $ ea
+  putStrLn "Localized propositions in the OMP:"
+  print $ length . filter (localizedFirst boxes) . elementsOf $ omp
+
+  putStrLn "Localized propositions in the effect algebra (rest):"
+  print $ length . filter (localizedOther boxes) . elementsOf $ ea
+  putStrLn "Localized propositions in the OMP (rest):"
+  print $ length . filter (localizedOther boxes) . elementsOf $ omp
