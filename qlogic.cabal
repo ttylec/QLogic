@@ -28,7 +28,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     QStructures, QStructures.Concrete, QStructures.Hilbert
                      , BoxModels, BoxModels.SetRepresentation 
-                     , BoxModels.HilbertRepresentations 
+                     , BoxModels.HilbertRepresentation
 
   -- Modules included in this library but not exported.
   other-modules:       

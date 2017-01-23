@@ -11,11 +11,16 @@ import BoxModels.SetRepresentation
 import BoxModels.HilbertRepresentation
 
 
+-- model = let x = binaryO 'X'
+--             y = binaryO 'Y'
+--             z = binaryO 'Z'
+--         in
+--           two [x, y, z] [x, y, z]
+
 model = let x = binaryO 'X'
             y = binaryO 'Y'
-            z = binaryO 'Z'
         in
-          two [x, y, z] [x, y, z]
+          two [x, y] [x, y]
 
 main :: IO ()
 main = do
