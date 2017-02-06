@@ -17,10 +17,15 @@ import BoxModels.HilbertRepresentation
 --         in
 --           two [x, y, z] [x, y, z]
 
+-- model = let x = binaryO 'X'
+--             y = binaryO 'Y'
+--         in
+--           two [x, y] [x, y]
+
 model = let x = binaryO 'X'
             y = binaryO 'Y'
         in
-          two [x, y] [x, y]
+          three [x, y] [x, y] [x, y]
 
 main :: IO ()
 main = do
@@ -28,11 +33,11 @@ main = do
     -- representation = phaseSubset phasespace
     -- constructor = ConcreteOMP gamma
     -- phasespace@(PhaseSpace gamma) = phaseSpace model
-    representation = questionRepr
-    constructor = HilbertOMP 4
+    representation = questionRepr3
+    constructor = HilbertOMP 8
     atoms = map representation $ boxAtoms model
     propositions = generateSubStructure . constructor $ atoms
 
   print . length $ atoms
   print . length $ propositions
-  print . length . nubBy (~==) $ propositions
+  -- print . length . nubBy (~==) $ propositions

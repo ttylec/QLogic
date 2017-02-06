@@ -1,72 +1,86 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 module BoxModels.HilbertRepresentation where
 
+import GHC.TypeLits
+import Data.Maybe
 import Data.List
-import Data.Complex
 import Data.Ratio
 import Data.Foldable hiding (toList)
 
 import QStructures.Hilbert
 import BoxModels
 import Linear.V
+import Linear.Vector
 import qualified Data.Vector as V
-
--- tolerance = 1e-10
-
--- (~==) :: Mat -> Mat -> Bool
--- a ~== b = all (almostEq 0) . toList . flatten $ a - b
---   where
---     almostEq x y = magnitude (x - y) < tolerance
-
--- infixr 1 ~==
-
-cI = 0 :+ 1 :: Complex Rational
-
--- e :: Int -> Int -> Vec
--- e dim i = dim |> ((take i $ repeat 0) ++ [1] ++ repeat 0)
-
--- proj :: Vec -> Mat
--- proj x = outer (conj nx) nx
---   where
---     nx = normalize x
-
--- normalize :: Vec -> Vec
--- normalize v = scale (1 / norm_2 v :+ 0) v
 
 -- Binary box representation
 
-matrix :: [[a]] -> Matrix n a
-matrix ls = Matrix . V . V.fromList $ map (V . V.fromList) ls
+pX 0 = fromJust . matrix $
+  [
+    [C 1 0, C 0 0]
+  , [C 0 0, C 0 0]
+  ]
+pX 1 = fromJust . matrix $
+  [
+    [C 0 0, C 0 0]
+  , [C 0 0, C 1 0]
+  ]
 
-pX 0 = matrix [[1 :+ 0, 0 :+ 0], [0 :+ 0, 0 :+ 0]]
-pX 1 = matrix [[0 :+ 0, 0 :+ 0], [0 :+ 0, 1 :+ 0]]
+pY 0 = fromJust . matrix $
+  [
+    [real $ 1%2, real $ -1%2]
+  , [real $ -1%2, real $ 1%2]
+  ]
+pY 1 = fromJust . matrix $
+  [
+    [real $ 1%2, real $ 1%2]
+  , [real $ 1%2, real $ 1%2]]
 
-pY 0 = matrix [[1%2 :+ 0, (-1%2) :+ 0], [(-1%2) :+ 0, 1%2 :+ 0]]
-pY 1 = matrix [[1%2 :+ 0,  1%2 :+ 0], [1%2 :+ 0,  1%2 :+ 0]]
+pZ 0 = fromJust . matrix $
+  [
+    [real $ 1%2, real $ -1%2]
+  , [real $ -1%2, real $ 1%2]
+  ]
+pZ 1 = fromJust . matrix $
+  [
+    [real $ 1%2, imag $ 1%2]
+  , [imag $ -1%2, real $ 1%2]
+  ]
 
-pZ :: Int -> Matrix n (Complex Rational)
-pZ 0 = matrix [[1%2 :+ 0, (-1%2) :+ 0], [(-1%2) :+ 0, 1%2 :+ 0]]
-pZ 1 = matrix [[1%2 :+ 0, 0 :+ 1%2], [0 :+ (-1%2), 1%2 :+ 0]]
+type family Composed (m :: Nat) (n :: * -> *) :: Nat where
+  Composed m Two = m * m
+  Composed m Three = m * m * m
 
--- e2 i = e 2 i
-
--- x i = e2 i
-
--- y 0 = e2 0 + e2 1
--- y 1 = e2 0 - e2 1
-
--- z 0 = e2 0 - scale cI (e2 1)
--- z 1 = e2 0 + scale cI (e2 1)
-
-atomRepr1 :: Box -> Matrix n (Complex Rational)
+atomRepr1 :: Box -> Matrix 2 (Complex Rational)
 atomRepr1 (Box 'X' i) = pX i
 atomRepr1 (Box 'Y' i) = pY i
 atomRepr1 (Box 'Z' i) = pZ i
 
--- atomRepr :: (System s, Foldable s) => s Box -> Matrix n (Complex Rational)
--- atomRepr box = foldl1 kronecker $ fmap atomRepr1 box
+-- atomRepr :: (System s, KnownNat n) => s Box -> Matrix (Composed 2 s) (Complex Rational)
+-- -- atomRepr :: (System s, KnownNat n) => s Box -> s (Matrix 2 (Complex Rational))
+-- atomRepr = foldl1 tensor . fmap atomRepr1
+
+atomRepr2 :: Two Box -> Matrix 4 (Complex Rational)
+atomRepr2 (Two (a, b)) = atomRepr1 a `tensor` atomRepr1 b
+
+atomRepr3 :: Three Box -> Matrix 8 (Complex Rational)
+atomRepr3 (Three (a, b, c)) = atomRepr1 a `tensor` atomRepr1 b `tensor` atomRepr1 c
+
+questionRepr1 (Question atoms) = foldl1' (^+^) $ map atomRepr1 atoms
+questionRepr2 (Question atoms) = foldl1' (^+^) $ map atomRepr2 atoms
+questionRepr3 (Question atoms) = foldl1' (^+^) $ map atomRepr3 atoms
 
 -- questionRepr :: (System s, Foldable s) => Question (s Box) -> Matrix n (Complex Rational)
 -- questionRepr (Question atoms) = foldl1' (+) $ map atomRepr atoms
