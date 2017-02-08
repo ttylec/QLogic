@@ -46,7 +46,10 @@ module QStructures ( QStruct, EA, OMP, OML
                    , equalIn, lessIn, orthoIn, ocmplIn
                    , supIn, infIn
                    , lubIn, glbIn
+                   , minimalIn
                    , decompose
+                   , decomposeBy
+                   , atomsOf
                    , generateSubStructure) where
 
 import Data.List
@@ -143,6 +146,17 @@ decompose ql atoms q = decompose' ql [] q atoms
     (.<=.) = lessIn ql
     ortho = orthoIn ql
 
+decomposeBy :: (a -> a -> Bool) -> (a -> a -> Bool) -> [a] -> a -> [a]
+decomposeBy (.<=.) ortho atoms q = decompose' [] q atoms
+  where
+    decompose' !accum _ [] = accum
+    decompose' !accum q (a:as)
+      | a .<=. q  = decompose' (a:accum) q $ filter (`ortho` a) as
+      | otherwise = decompose' accum q as
+
+atomsOf :: (Eq a, QStruct p a) => p -> [a]
+atomsOf ql = minimalIn ql . filter (/= zeroOf ql) . elementsOf $ ql
+
 -- TODO: we need SCC here, since that implementation
 -- might be wrong (I see no reason why incremental build
 -- should be sufficient).
@@ -169,14 +183,18 @@ generateSubStructure :: (QStruct p a, Ord a) => p -> [a]
 generateSubStructure struct = Set.toList . fixedSet (subGenerator struct) . Set.fromList . elementsOf $ struct
 
 subGenerator :: (QStruct p a, Ord a) => p -> Set a -> Set a
-subGenerator struct accum = accum `Set.union` complements `Set.union` sums
+subGenerator struct !accum = accum `Set.union` complements `Set.union` sums
   where
     complements = Set.map (ocmplIn struct) accum
+    -- sums = Set.foldl' go Set.empty accum
+    --   where
+        -- go !acc !a = Set.union acc . Set.map (fromJust . oplusIn struct a)
+        --   . Set.filter (orthoIn struct a) $ accum
     sums = Set.fromList . sums' . Set.toList $ accum
     sums' [] = []
     sums' (a:as) = go as ++ sums' as
       where
-        go = map (fromJust . oplusIn struct a) . filter (orthoIn struct a)
+        go !x = map (fromJust . oplusIn struct a) . filter (orthoIn struct a) $ x
 
 
 -- | Iterate function as long as result changes, specialized for sets.

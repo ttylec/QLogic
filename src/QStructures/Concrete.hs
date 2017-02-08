@@ -17,10 +17,16 @@ data ConcreteOMP a = ConcreteOMP (Set a) [Set a]
 
 data ConcreteBoxEA a = ConcreteBoxEA (Set a) [Set a] [Set a]
 
+disjoint :: Ord a => Set a -> Set a -> Bool
+disjoint a b = Set.null $ Set.intersection a b
+
 instance Ord a => QStruct (ConcreteBoxEA a) (Set a) where
   elementsOf (ConcreteBoxEA _ _ els) = els
   orthoIn ea@(ConcreteBoxEA _ atoms _ ) a b =
-    not . null . decompose ea atoms . ocmplIn ea $ Set.union a b
+    disjoint a b && (cmpl == Set.empty || decomposable cmpl)
+    where
+      cmpl = ocmplIn ea $ Set.union a b
+      decomposable = not . null . decomposeBy Set.isSubsetOf disjoint atoms
   oplusIn ea@(ConcreteBoxEA _ atoms _) a b
     | orthoIn ea a b = Just $ Set.union a b
     | otherwise = Nothing

@@ -13,6 +13,7 @@ module QStructures.Hilbert where
 
 import Prelude hiding (replicate)
 import Data.Maybe
+import qualified Data.Text as T
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
 import Data.Map (Map)
@@ -25,18 +26,30 @@ import Linear.Matrix
 import Linear.Vector
 import GHC.TypeLits
 import QStructures
-
+import Data.Ratio
 
 data Complex a = C !a !a deriving (Eq, Ord)
 
+class MathematicaForm a where
+  mform :: a -> T.Text
+
+instance MathematicaForm Int where
+  mform = T.pack . show
+
+instance MathematicaForm Double where
+  mform = T.pack . show
+
+instance Show a => MathematicaForm (Ratio a) where
+  mform x = (T.pack . show . numerator $ x) `T.append`
+    "/" `T.append`
+    (T.pack . show . denominator $ x)
+
 instance Show a => Show (Complex a) where
-  show (C r i) = show r ++ " + " ++ show i ++ " i"
+  show (C r i) = show r ++ "+" ++ show i ++ "i"
 
-real :: Num a => a -> Complex a
-real x = C x 0
-
-imag :: Num a => a -> Complex a
-imag x = C 0 x
+instance MathematicaForm a => MathematicaForm (Complex a) where
+  mform (C r i) = mform r `T.append` "+" `T.append`
+    mform i `T.append` "I"
 
 instance Num a => Num (Complex a) where
   (C x1 y1) + (C x2 y2) = C (x1 + x2) (y1 + y2)
@@ -46,7 +59,28 @@ instance Num a => Num (Complex a) where
   abs (C x y) = C (x*x + y*y) 0
   signum (C x y) = 0
 
+real :: Num a => a -> Complex a
+real x = C x 0
+
+imag :: Num a => a -> Complex a
+imag x = C 0 x
+
 newtype Matrix (n :: Nat) s = Matrix (V n (V n s)) deriving (Eq, Ord, Show)
+
+instance (Dim n, MathematicaForm a) => MathematicaForm (Matrix n a) where
+  mform (Matrix a) = formatRows . V.map formatRow . toVector $ a
+    where
+      formatRow :: (Dim n, MathematicaForm a) => V n a -> T.Text
+      formatRow r = "{" `T.append`
+        (T.intercalate ", " . V.toList . toVector $ fmap mform r) `T.append`
+        "}"
+      formatRows m = "{\n" `T.append`
+        (T.intercalate "\n," . V.toList $ m) `T.append`
+        "}"
+
+instance MathematicaForm a => MathematicaForm [a] where
+  mform m = "{" `T.append` (T.intercalate ", " . map mform $ m)
+    `T.append` "}"
 
 instance Dim n => Dim (Matrix n a) where
   reflectDim _ = reflectDim (Proxy :: Proxy n)
@@ -55,7 +89,6 @@ instance Dim n => Dim (Matrix n a) where
 matrix :: forall n a. Dim n => [[a]] -> Maybe (Matrix n a)
 matrix ls
   | length ls == dim && all (==dim) rowlengths = Matrix <$> (rows >>= fromVector)
-  -- | length ls == dim && all (==dim) rowlengths = rows >>= fromVector
   | otherwise = Nothing
   where
     dim = reflectDim (Proxy :: Proxy n)
@@ -80,8 +113,7 @@ instance Dim n => Additive (Matrix n) where
 
 tensor :: (KnownNat (n*m), KnownNat n, KnownNat m, Num a)
        => Matrix n a -> Matrix m a -> Matrix (n*m) a
-tensor (Matrix a) (Matrix b) = Matrix . flatten . fmap (fmap (*!! b)) $ a
-
+tensor (Matrix !a) (Matrix !b) = Matrix . flatten . fmap (fmap (*!! b)) $ a
 
 flatten :: (KnownNat (n*m), KnownNat n, KnownNat m) =>
            V n (V n (V m (V m a))) -> V (n*m) (V (n*m) a)
@@ -91,34 +123,42 @@ rowconcat :: (KnownNat n, KnownNat m, KnownNat (n*m)) => V n (V m a) -> V (n*m) 
 rowconcat = fromJust . fromVector . G.unstream . Bundle.concatVectors .
   Bundle.map toVector . Bundle.fromVector . toVector
 
-data HilbertOMP n s = HilbertOMP Int [Matrix n s]
+data HilbertOMP n s = HilbertOMP !Int ![Matrix n s]
+data HilbertBoxEA n s = HilbertBoxEA !Int ![Matrix n s] ![Matrix n s]
 
--- instance (Num s, Ord s, Dim n) => Ord (Matrix n s) where
---   compare a b = compare (flatten a) (flatten b)
---     where
---       flatten :: Matrix n s -> Vector s
---       flatten = fmap toVector . toVector
+projOrdering :: (Dim n, Eq s, Num s) => Matrix n s -> Matrix n s -> Bool
+projOrdering (Matrix a) (Matrix b) = a !*! b == a && b !*! a == a
 
--- zero :: (Dim n, Num s) => n -> Matrix n s
--- zero n = (n><n) $ repeat 0
+projOrthogonal :: (Dim n, Eq s, Num s) => Matrix n s -> Matrix n s -> Bool
+projOrthogonal (Matrix a) (Matrix b) = Matrix (a !*! b) == zero
 
 instance (Eq s, Num s, Dim n) => QStruct (HilbertOMP n s) (Matrix n s) where
   elementsOf (HilbertOMP _ els) = els
-  orthoIn omp (Matrix a) (Matrix b) = Matrix (a !*! b) == zero
+  orthoIn _ = projOrthogonal
   oplusIn omp a b
     | orthoIn omp a b = Just $ a ^+^ b
     | otherwise = Nothing
   zeroOf (HilbertOMP n _) = zero  -- Matrix $ V zero
   oneOf (HilbertOMP n _) = Matrix $ identity
   equalIn _ = (==)
-  lessIn _ (Matrix a) (Matrix b) = a !*! b == a && b !*! a == a
+  lessIn _ = projOrdering
   ocmplIn omp a = oneOf omp ^-^ a
 
--- TODO there is some strange error when trying to define it polymorphic
--- instance (Num s, Element s, Numeric s) => QStruct (HilbertOMP s) (Matrix s) where
---   elementsOf (HilbertOMP _ els) = els
---   orthoIn (HilbertOMP n _) a b = a <> b == zero n
---   oplusIn omp a b
---     | orthoIn omp a b = Just $ a + b
---     | otherwise = Nothing
---   zeroOf (HilbertOMP n _) = zero n
+instance (Eq s, Num s, Dim n) => QStruct (HilbertBoxEA n s) (Matrix n s) where
+  elementsOf (HilbertBoxEA _ _ els) = els
+  orthoIn ea@(HilbertBoxEA _ atoms _) ma@(Matrix a) mb@(Matrix b) =
+    projOrthogonal ma mb && (cmpl == zero || decomposable cmpl)
+    where
+      cmpl = ocmplIn ea . Matrix $ a ^+^ b
+      decomposable = not . null . decomposeBy projOrdering projOrthogonal atoms
+  oplusIn omp a b
+    | orthoIn omp a b = Just $ a ^+^ b
+    | otherwise = Nothing
+  zeroOf ea = zero
+  oneOf ea = Matrix $ identity
+  equalIn _ = (==)
+  lessIn _ = projOrdering
+  ocmplIn omp (Matrix !a) = Matrix $ identity ^-^ a
+
+instance (Dim n, Num a, Ord a) => OMP (HilbertOMP n a) (Matrix n a)
+instance (Dim n, Num a, Ord a) => EA (HilbertBoxEA n a) (Matrix n a)
