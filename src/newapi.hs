@@ -1,26 +1,32 @@
 module Main (main) where
 
+import Prelude hiding (writeFile)
+
 import Data.List
 import System.Environment
 
 import QStructures
+import QStructures.IO
 import QStructures.Concrete
 import QStructures.Hilbert
 import BoxModels
 import BoxModels.SetRepresentation
 import BoxModels.HilbertRepresentation
 
-
-model = let x = binaryO 'X'
-            y = binaryO 'Y'
-            z = binaryO 'Z'
-        in
-          two [x, y, z] [x, y, z]
+import Data.ByteString (writeFile)
+import Data.Serialize (encode)
+import qualified Data.Text as T
 
 -- model = let x = binaryO 'X'
 --             y = binaryO 'Y'
+--             z = binaryO 'Z'
 --         in
---           two [x, y] [x, y]
+--           two [x, y, z] [x, y, z]
+
+model = let x = binaryO 'X'
+            y = binaryO 'Y'
+        in
+          two [x, y] [x, y]
 
 -- model = let x = binaryO 'X'
 --             y = binaryO 'Y'
@@ -42,4 +48,9 @@ main = do
 
   print . length $ atoms
   print . length $ propositions
+
+  let
+    (g, _, _) = toGraph (constructor propositions) [1..]
+  putStrLn . T.unpack . mform $ g
+  -- writeFile "logic.qs" $ encode (constructor propositions)
   -- print . length . nubBy (~==) $ propositions

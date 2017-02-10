@@ -27,6 +27,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     QStructures, QStructures.Concrete, QStructures.Hilbert
+                     , QStructures.IO
                      , BoxModels, BoxModels.SetRepresentation 
                      , BoxModels.HilbertRepresentation
 
@@ -49,7 +50,8 @@ library
                        glpk-hs >= 0.3.5,
                        hmatrix >= 0.17,
                        linear >= 1.20,
-                       text >= 1.2
+                       text >= 1.2,
+                       cereal >= 0.5
   
   -- Directories containing source files.
   hs-source-dirs:      src/ 

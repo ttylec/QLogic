@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -7,11 +9,11 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module QStructures.Hilbert where
 
 import Prelude hiding (replicate)
+import Data.Serialize
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.IntSet as IntSet
@@ -25,24 +27,15 @@ import Linear.V
 import Linear.Matrix
 import Linear.Vector
 import GHC.TypeLits
+import GHC.Generics
 import QStructures
 import Data.Ratio
+import QStructures.IO
 
-data Complex a = C !a !a deriving (Eq, Ord)
+data Complex a = C !a !a deriving (Eq, Ord, Generic)
 
-class MathematicaForm a where
-  mform :: a -> T.Text
+instance Serialize a => Serialize (Complex a)
 
-instance MathematicaForm Int where
-  mform = T.pack . show
-
-instance MathematicaForm Double where
-  mform = T.pack . show
-
-instance Show a => MathematicaForm (Ratio a) where
-  mform x = (T.pack . show . numerator $ x) `T.append`
-    "/" `T.append`
-    (T.pack . show . denominator $ x)
 
 instance Show a => Show (Complex a) where
   show (C r i) = show r ++ "+" ++ show i ++ "i"
@@ -65,7 +58,9 @@ real x = C x 0
 imag :: Num a => a -> Complex a
 imag x = C 0 x
 
-newtype Matrix (n :: Nat) s = Matrix (V n (V n s)) deriving (Eq, Ord, Show)
+newtype Matrix (n :: Nat) s = Matrix (V n (V n s)) deriving (Eq, Ord, Show, Generic)
+
+instance (Dim n, Serialize s) => Serialize (Matrix n s)
 
 instance (Dim n, MathematicaForm a) => MathematicaForm (Matrix n a) where
   mform (Matrix a) = formatRows . V.map formatRow . toVector $ a
@@ -77,10 +72,6 @@ instance (Dim n, MathematicaForm a) => MathematicaForm (Matrix n a) where
       formatRows m = "{\n" `T.append`
         (T.intercalate "\n," . V.toList $ m) `T.append`
         "}"
-
-instance MathematicaForm a => MathematicaForm [a] where
-  mform m = "{" `T.append` (T.intercalate ", " . map mform $ m)
-    `T.append` "}"
 
 instance Dim n => Dim (Matrix n a) where
   reflectDim _ = reflectDim (Proxy :: Proxy n)
@@ -123,8 +114,12 @@ rowconcat :: (KnownNat n, KnownNat m, KnownNat (n*m)) => V n (V m a) -> V (n*m) 
 rowconcat = fromJust . fromVector . G.unstream . Bundle.concatVectors .
   Bundle.map toVector . Bundle.fromVector . toVector
 
-data HilbertOMP n s = HilbertOMP !Int ![Matrix n s]
+data HilbertOMP n s = HilbertOMP !Int ![Matrix n s] deriving (Generic)
 data HilbertBoxEA n s = HilbertBoxEA !Int ![Matrix n s] ![Matrix n s]
+  deriving (Generic)
+
+instance (Dim n, Serialize s) => Serialize (HilbertOMP n s)
+instance (Dim n, Serialize s) => Serialize (HilbertBoxEA n s)
 
 projOrdering :: (Dim n, Eq s, Num s) => Matrix n s -> Matrix n s -> Bool
 projOrdering (Matrix a) (Matrix b) = a !*! b == a && b !*! a == a

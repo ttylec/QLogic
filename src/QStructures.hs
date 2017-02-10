@@ -50,14 +50,18 @@ module QStructures ( QStruct, EA, OMP, OML
                    , decompose
                    , decomposeBy
                    , atomsOf
-                   , generateSubStructure) where
+                   , generateSubStructure
+                   , toGraph) where
 
 import Data.List
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
+import Data.Graph
 
 import Control.Monad
+
+import QStructures.IO
 
 class QStruct p a | p -> a where
   elementsOf :: p -> [a]
@@ -203,3 +207,11 @@ fixedSet f x | Set.size next == Set.size x = x
              | otherwise = fixedSet f next
   where
     next = f x
+
+toGraph :: (Ord a, QStruct p a) => p -> [b]
+  -> (Graph, Vertex -> (b, a, [a]), a -> Maybe Vertex)
+toGraph qs labels = graphFromEdges . map node $ zip labels els
+  where
+    node = (\(l, a) -> (l, a, greaterThan a))
+    els = elementsOf qs
+    greaterThan a = filter (lessIn qs a) $ els
